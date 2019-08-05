@@ -5,8 +5,15 @@
 #include <ESP8266WebServer.h>
 #include <SPI.h>
 
-#define LEDPIN 2
-#define DATAPIN 0
+//Lolin
+//#define LEDPIN 2
+//#define DATAINPIN 0
+//#define DATAOUTPIN 2//?
+
+//D1 Mini
+#define LEDPIN 16
+#define DATAINPIN D1
+#define DATAOUTPIN D2
 
 #define MIN_TEMP 9 //Minimum temperature supported by the hot tub
 #define MAX_TEMP 40 //Maximum temperature supported by the hot tub
@@ -32,9 +39,12 @@ int temperature = 0;
 //desired water temperature
 int targetTemperature = 37;
 
-
-const startMarker = 
-const int oneBit = 440;
+const int isrTrim = 50;//??
+const int startWidth = 4440;
+const int buttonWidth = 147;
+const int buttonDetectWidth = 100;
+const int buttonDetectRemain = buttonWidth - buttonDetectWidth; 
+const int bitWidth = 440;
 
 
 
@@ -227,19 +237,36 @@ void handle_temperature() {
 
 
 void handleDataInterrupt() {
- detachInterrupt(digitalPinToInterrupt(DATAPIN));
+  detachInterrupt(digitalPinToInterrupt(DATAINPIN));
 
 
+  delayMicroseconds(startWidth - isrTrim);
 
+  //button presses go low for 147us then high again
+  delayMicroseconds(buttonDetectWidth);
+
+  if (digitalRead(DATAINPIN)) {
+    //button pressed
+    Serial.println("Button press");
+  }else{
+    //normal command
+    Serial.println("Command");
+
+
+    digitalWrite(LEDPIN, HIGH);
+    
+  }
+  
  
- attachInterrupt(digitalPinToInterrupt(DATAPIN), handleDataInterrupt, RISING);
+  attachInterrupt(digitalPinToInterrupt(DATAINPIN), handleDataInterrupt, RISING);
 }
 
 void setup(void)
 {
   pinMode(LEDPIN, OUTPUT);    
-  pinMode(DATAPIN, INPUT);
-  attachInterrupt(digitalPinToInterrupt(DATAPIN), handleDataInterrupt, RISING);
+  pinMode(DATAINPIN, INPUT);
+  pinMode(DATAOUTPIN, OUTPUT);
+  attachInterrupt(digitalPinToInterrupt(DATAINPIN), handleDataInterrupt, RISING);
   
   Serial.begin(115200);  // Serial connection from ESP-01 via 3.3v console cable
 
