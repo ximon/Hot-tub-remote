@@ -5,12 +5,14 @@
 #include <ESP8266WebServer.h>
 #include <SPI.h>
 
+#define LEDPIN 2
+#define DATAPIN 0
 
-
+#define MIN_TEMP 9 //Minimum temperature supported by the hot tub
+#define MAX_TEMP 40 //Maximum temperature supported by the hot tub
 
 // -- Initial name of the Thing. Used e.g. as SSID of the own Access Point.
 const char thingName[] = "HotTubRemote";
-
 // -- Initial password to connect to the Thing, when it creates an own Access Point.
 const char wifiInitialApPassword[] = "HotTubRemote";
 
@@ -19,21 +21,20 @@ ESP8266WebServer server(80);
 IotWebConf iotWebConf(thingName, &dnsServer, &server, wifiInitialApPassword);
  
 
-
-#define LEDPIN 2
-#define COUNTPIN 0
-
-#define MAX_TEMP 40 //Maximum temperature supported by the hot tub
-//todo - find out what the min is???
-#define MIN_TEMP 15 //Minimum temperature supported by the hot tub
-
 int autoRestart = 0;
+
+//these are the current states (decoded from the serial stream)
 int pumpState = 0;
 int blowerState = 0;
 int heaterState = 0;
 int temperature = 0;
 
+//desired water temperature
 int targetTemperature = 37;
+
+
+const startMarker = 
+const int oneBit = 440;
 
 
 
@@ -106,6 +107,7 @@ void okText(String message) {
   server.send(200, "text/plain", message);
 }
 
+//outputs the html
 void okHtml(String html) {
   server.send(200, "text/html", html);
 }
@@ -224,12 +226,21 @@ void handle_temperature() {
 }
 
 
+void handleDataInterrupt() {
+ detachInterrupt(digitalPinToInterrupt(DATAPIN));
 
+
+
+ 
+ attachInterrupt(digitalPinToInterrupt(DATAPIN), handleDataInterrupt, RISING);
+}
 
 void setup(void)
 {
   pinMode(LEDPIN, OUTPUT);    
-  pinMode(COUNTPIN, INPUT);
+  pinMode(DATAPIN, INPUT);
+  attachInterrupt(digitalPinToInterrupt(DATAPIN), handleDataInterrupt, RISING);
+  
   Serial.begin(115200);  // Serial connection from ESP-01 via 3.3v console cable
 
   // -- Initializing the configuration.
