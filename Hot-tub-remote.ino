@@ -1,16 +1,24 @@
 #include <ArduinoJson.h>
-
+#include <IotWebConf.h>
 #include <WiFiClient.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
 #include <SPI.h>
 
-const char* ssid     = "SSID";
-const char* password = "PASSWORD";
 
+
+
+// -- Initial name of the Thing. Used e.g. as SSID of the own Access Point.
+const char thingName[] = "HotTubRemote";
+
+// -- Initial password to connect to the Thing, when it creates an own Access Point.
+const char wifiInitialApPassword[] = "HotTubRemote";
+
+DNSServer dnsServer;
 ESP8266WebServer server(80);
+IotWebConf iotWebConf(thingName, &dnsServer, &server, wifiInitialApPassword);
  
-String webString="";     // String to display
+
 
 #define LEDPIN 2
 #define COUNTPIN 0
@@ -63,7 +71,7 @@ bool valueIsOn(String argumentName) {
 
 String getArg(String argumentName) {
   argumentName.toLowerCase();
-  return server.arg(argumentName)
+  return server.arg(argumentName);
 }
 
 bool hasArg(String argumentName) {
@@ -98,6 +106,10 @@ void okText(String message) {
   server.send(200, "text/plain", message);
 }
 
+void okHtml(String html) {
+  server.send(200, "text/html", html);
+}
+
 //sends the error message wrapped in a json object
 void errorMessage(String message) {
   server.send(400, "application/json", toJson(message));
@@ -122,7 +134,18 @@ String toJson(String message) {
  */
 
 void handle_root() {
-  okText("Hello, read from /states");
+  // -- Captive portal request were already served.
+  if (iotWebConf.handleCaptivePortal()) {
+    return;
+  }
+  
+  String s = "<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1, user-scalable=no\"/>";
+  s += "<title>Hot Tub Remote</title></head><body>Hot Tub Remote<br /><br />";
+  s += "Go to <a href='config'>configure page</a> to change settings.<br />";
+  s += "Go to <a href='states'>states</a> to view states.<br />";
+  s += "</body></html>\n";
+
+  okHtml(s);
 }
 
 void handle_states() {
@@ -209,26 +232,15 @@ void setup(void)
   pinMode(COUNTPIN, INPUT);
   Serial.begin(115200);  // Serial connection from ESP-01 via 3.3v console cable
 
-  // Connect to WiFi network
-  WiFi.begin(ssid, password);
-  Serial.print("\n\r \n\rConnecting");
+  // -- Initializing the configuration.
+  iotWebConf.setStatusPin(LEDPIN);
+  iotWebConf.init();
 
-  bool led;
-  // Wait for connection
-  while (WiFi.status() != WL_CONNECTED) {
-    led = !led;
-    digitalWrite(LEDPIN, led);
-    delay(500);
-    Serial.print(".");
-  }
-
-  Serial.println("");
-  Serial.print("Connected to ");
-  Serial.println(ssid);
-  Serial.print("IP address: ");
-  Serial.println(WiFi.localIP());
-   
+  // -- Set up required URL handlers on the web server.
   server.on("/", handle_root);
+  server.on("/config", []{ iotWebConf.handleConfig(); });
+  server.onNotFound([](){ iotWebConf.handleNotFound(); });
+
   server.on("/states", handle_states);
   server.on("/autoRestart", HTTP_POST, handle_autoRestart);
   server.on("/pump", HTTP_POST, handle_pump);
@@ -242,5 +254,7 @@ void setup(void)
 
 void loop(void)
 {  
+  // -- doLoop should be called as frequently as possible.
+  iotWebConf.doLoop();
   server.handleClient();
 } 
