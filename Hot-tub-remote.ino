@@ -5,15 +5,11 @@
 #include <ESP8266WebServer.h>
 #include <SPI.h>
 
-//Lolin
-//#define LEDPIN 2
-//#define DATAINPIN 0
-//#define DATAOUTPIN 2//?
-
 //D1 Mini
 #define LEDPIN 16
 #define DATAINPIN D1
 #define DATAOUTPIN D2
+#define DBGPIN D8
 
 #define MIN_TEMP 9 //Minimum temperature supported by the hot tub
 #define MAX_TEMP 40 //Maximum temperature supported by the hot tub
@@ -39,12 +35,30 @@ int temperature = 0;
 //desired water temperature
 int targetTemperature = 37;
 
-const int isrTrim = 50;//??
-const int startWidth = 4440;
-const int buttonWidth = 147;
-const int buttonDetectWidth = 100;
-const int buttonDetectRemain = buttonWidth - buttonDetectWidth; 
-const int bitWidth = 440;
+
+
+
+
+
+
+
+
+
+
+
+//these are the widths of the pulses
+#define ignoreInvalidStartPulse true  //enable this to allow testing without a valid waveform
+#define startPulse 4440               //width of the start pulse
+#define startPulseTolerance 100
+#define startPulseMin startPulse - startPulseTolerance
+#define startPulseMax startPulse + startPulseTolerance
+#define dataStartDelay 200            //amount of time after start pulse has gone low to wait before sampling the bits
+#define bitPulse 440                  //width of one bit
+#define thirdBitPulse bitPulse / 3
+#define buttonWidth 147               //width of the low pulse when a button is pressed
+#define bitCount 14                   //number of bits to read in
+#define datamask 1 << bitCount
+
 
 
 
@@ -235,38 +249,101 @@ void handle_temperature() {
   Serial.println(msg);
 }
 
+bool ledState = true;
 
-void handleDataInterrupt() {
+void disableDataInterrupt() {
   detachInterrupt(digitalPinToInterrupt(DATAINPIN));
+}
 
-
-  delayMicroseconds(startWidth - isrTrim);
-
-  //button presses go low for 147us then high again
-  delayMicroseconds(buttonDetectWidth);
-
-  if (digitalRead(DATAINPIN)) {
-    //button pressed
-    Serial.println("Button press");
-  }else{
-    //normal command
-    Serial.println("Command");
-
-
-    digitalWrite(LEDPIN, HIGH);
-    
-  }
-  
- 
+void enableDataInterrupt() {
   attachInterrupt(digitalPinToInterrupt(DATAINPIN), handleDataInterrupt, RISING);
 }
+
+void handleDataInterrupt() {
+  disableDataInterrupt();
+
+  digitalWrite(DBGPIN, HIGH); //Debug high while checking start pulse length
+
+  //here the first long pulse has gone high
+  unsigned long startTime;
+  unsigned long endTime;
+  unsigned long pulseDuration;
+
+  //start timing first pulse
+  startTime = micros();
+
+  //Serial.print("Start Time is ");
+  //Serial.println(startTime);
+
+  //wait for the first long pulse to go low
+  while (digitalRead(DATAINPIN) && pulseDuration < startPulseMax)
+  { 
+    endTime = micros(); //update endTime to check if we have detected a too long pulse
+    pulseDuration = endTime - startTime;
+  }
+  digitalWrite(DBGPIN, LOW); //Debug low after checking start pulse length
+
+  //Serial.print("End time is ");
+  //Serial.println(endTime);
+
+
+  
+  //if start pulse wasn't the correct duration, get out
+  if (pulseDuration < startPulseMin || pulseDuration > startPulseMax) {
+
+    Serial.print("Timed out detecting start pulse @ ");
+    Serial.println(pulseDuration);
+    
+    if (!ignoreInvalidStartPulse) {
+      enableDataInterrupt();
+      return;
+    }
+  }
+
+  //here we have confirmed that the start pulse was ~4440us and the signal is now low (Start Confirm on diagram)
+
+  delayMicroseconds(dataStartDelay);
+
+  // (Button detect on diagram)
+
+  word data;
+
+  //Get the bits  
+  for (word i=0x2000; i > 0; i >>= 1)
+  {
+    delayMicroseconds(thirdBitPulse);
+    digitalWrite(DBGPIN, HIGH); //Debug signal high whilst checking the bit
+    
+    word  noti = ~i;
+    if (digitalRead(DATAINPIN))
+      data |= i;
+    else // else clause added to ensure function timing is ~balanced
+      data &= noti;
+
+    delayMicroseconds(thirdBitPulse);
+    digitalWrite(DBGPIN, LOW); //Debug signal low after checking the bit
+    delayMicroseconds(thirdBitPulse);
+  }
+
+
+  digitalWrite(DBGPIN, LOW); //Debug signal high after checking button is pressed
+  
+  //End getting the bits
+
+
+
+  enableDataInterrupt();
+}
+
+
 
 void setup(void)
 {
   pinMode(LEDPIN, OUTPUT);    
   pinMode(DATAINPIN, INPUT);
   pinMode(DATAOUTPIN, OUTPUT);
-  attachInterrupt(digitalPinToInterrupt(DATAINPIN), handleDataInterrupt, RISING);
+  pinMode(DBGPIN, OUTPUT);
+  enableDataInterrupt();
   
   Serial.begin(115200);  // Serial connection from ESP-01 via 3.3v console cable
 
