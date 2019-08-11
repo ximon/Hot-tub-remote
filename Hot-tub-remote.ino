@@ -1,63 +1,73 @@
+//todo - theres ~40ms between commands from the controller, wait ~20us after a comand has ended to send any commands
+//todo - occasionally we will need to send a temp up / down command to read the desired temp set on the pump
+//todo - the commands should probably be added to a queue to be sent to the pump
+//todo - still need to check how the flashing works
+
+//#define IGNORE_INVALID_START_PULSE //enable this to allow testing without a valid start pulse
+#define ALLOW_SEND_WITHOUT_RECEIVE false //enable this to allow sending commands without having first received any
+#define DISABLE_TARGET_TEMPERATURE
+
+#define HOSTNAME "HotTubRemote-" // Hostname. The setup function adds the Chip ID at the end.
+
 #include <ArduinoJson.h>
 #include <IotWebConf.h>
 #include <WiFiClient.h>
 #include <ESP8266WiFi.h>
+#include <esp8266_peri.h>
 #include <ESP8266WebServer.h>
+#include <ArduinoOTA.h>
 #include <SPI.h>
-
-//D1 Mini
-#define LEDPIN 16
-#define DATAINPIN D1
-#define DATAOUTPIN D2
-#define DBGPIN D8
+#include "RouteHandler.h"
+#include "Commands.h"
+#include "SendReceive.h"
+#include "Interrupts.h"
+#include "Temperatures.h"
 
 #define MIN_TEMP 9 //Minimum temperature supported by the hot tub
 #define MAX_TEMP 40 //Maximum temperature supported by the hot tub
+
 
 // -- Initial name of the Thing. Used e.g. as SSID of the own Access Point.
 const char thingName[] = "HotTubRemote";
 // -- Initial password to connect to the Thing, when it creates an own Access Point.
 const char wifiInitialApPassword[] = "HotTubRemote";
 
+#define IOTWEBCONF_CONFIG_USE_MDNS
+
 DNSServer dnsServer;
 ESP8266WebServer server(80);
 IotWebConf iotWebConf(thingName, &dnsServer, &server, wifiInitialApPassword);
  
 
-int autoRestart = 0;
+bool sendTestCommand = false;
+
+/*
+ * Pump status stuff
+ */
+bool autoRestart = false;
+
 
 //these are the current states (decoded from the serial stream)
-int pumpState = 0;
-int blowerState = 0;
-int heaterState = 0;
-int temperature = 0;
+bool pumpEnabled = false;
+bool blowerEnabled = false;
+bool heaterEnabled = false;
+bool heaterHeating = false;
 
-//desired water temperature
-int targetTemperature = 37;
+int errorCode = 0;
 
+int temperature = 0; //Current actual water temperature
+int pumpTargetTemperature = 0; //The target temperature that is set on the pump (set by the panel or us)
 
+int targetTemperature = 37; //desired water temperature, the loop will send up / down signals to try to set the pump to this temp
+int maxTemperature = MAX_TEMP; //prevent the panel from changing the temperature above this value, the loop will send down signals to decrease the adjusted value
 
-
-
-
-
-
-
-
+bool panelLock = false; //if status changes are received, revert them
+bool temperatureLock = false; //if temperature changes are received, revert them
 
 
-//these are the widths of the pulses
-#define ignoreInvalidStartPulse true  //enable this to allow testing without a valid waveform
-#define startPulse 4440               //width of the start pulse
-#define startPulseTolerance 100
-#define startPulseMin startPulse - startPulseTolerance
-#define startPulseMax startPulse + startPulseTolerance
-#define dataStartDelay 200            //amount of time after start pulse has gone low to wait before sampling the bits
-#define bitPulse 440                  //width of one bit
-#define thirdBitPulse bitPulse / 3
-#define buttonWidth 147               //width of the low pulse when a button is pressed
-#define bitCount 14                   //number of bits to read in
-#define datamask 1 << bitCount
+
+
+
 
 
 
@@ -71,7 +81,22 @@ String toOnOff(bool value) {
   return value ? "on" : "off";
 }
 
-bool isArgumentMissing(String argumentName) {
+
+/*
+ * Server helper functions
+ */
+
+String getArg(String argumentName) {
+  argumentName.toLowerCase();
+  return server.arg(argumentName);
+}
+
+bool hasArg(String argumentName) {
+  argumentName.toLowerCase();
+  return server.hasArg(argumentName);
+}
+
+bool checkArgument(String argumentName) {
   if (!hasArg(argumentName)) {
     valueMissing(argumentName);
     return true;
@@ -86,7 +111,7 @@ void valueMissing(String argumentName) {
   Serial.println(output);  
 }
 
-bool valueIsOn(String argumentName) {
+bool valueIsTrue(String argumentName) {
   String value = getArg(argumentName);
   value.trim();
   value.toLowerCase();
@@ -94,22 +119,14 @@ bool valueIsOn(String argumentName) {
   return value == "on" || value == "1" || value == "true" || value == "yes";
 }
 
-String getArg(String argumentName) {
-  argumentName.toLowerCase();
-  return server.arg(argumentName);
-}
-
-bool hasArg(String argumentName) {
-  argumentName.toLowerCase();
-  return server.hasArg(argumentName);
-}
-
-
-
 
 /*
  * Http Helper functions
  */
+
+void addCorsHeaders() {
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+}
 
 //passes "Done" to be wrapped in a json object
 void okMessage() {
@@ -123,6 +140,7 @@ void okMessage(String message) {
 
 //outputs the json
 void okJson(String json) {
+  addCorsHeaders();
   server.send(200, "application/json", json);
 }
 
@@ -143,7 +161,7 @@ void errorMessage(String message) {
 
 //wraps the provided message in a json object
 String toJson(String message) {
-  const size_t capacity = JSON_OBJECT_SIZE(3);
+  const size_t capacity = JSON_OBJECT_SIZE(5); //todo - 5? what size should this be? variable?
   StaticJsonDocument<capacity> doc;
   String json;
 
@@ -174,26 +192,32 @@ void handle_root() {
   okHtml(s);
 }
 
-void handle_states() {
-  const size_t capacity = JSON_OBJECT_SIZE(7); //weirdld, this needs to be +1 since adding toOnOff?!
+void handle_status() {
+  const size_t capacity = JSON_OBJECT_SIZE(12);
   StaticJsonDocument<capacity> doc;
   String json;
 
-  doc["autoRestart"] = toOnOff(autoRestart);
-  doc["pump"] = toOnOff(pumpState);
-  doc["blower"] = toOnOff(blowerState);
-  doc["heater"] = heaterState == 2 ? "heating" : toOnOff(heaterState);
+  doc["autoRestart"] = autoRestart;
+  doc["pump"] = pumpEnabled;
+  doc["blower"] = blowerEnabled;
+  doc["heaterEnabled"] = heaterEnabled;
+  doc["heaterHeating"] = heaterHeating;
   doc["temperature"] = temperature;
+  doc["maxTemperature"] = maxTemperature;
   doc["targetTemperature"] = targetTemperature;
+  doc["temperatureLock"] = temperatureLock;
+  doc["panelLock"] = panelLock;
+  doc["errorCode"] = errorCode;
 
   serializeJson(doc, json);
   okJson(json);
 }
 
 void handle_autoRestart() {
-  if (isArgumentMissing("state")) return;
-  
-  autoRestart = valueIsOn("state");
+  if (checkArgument("state")) 
+    return;
+
+  autoRestart = valueIsTrue("state");
   
   String msg = "Auto restart is " + toOnOff(autoRestart);
   okMessage(msg);
@@ -201,154 +225,348 @@ void handle_autoRestart() {
 }
 
 void handle_pump() {
-  if (isArgumentMissing("state")) return;
+  if (checkArgument("state"))
+    return;
+
+  if (pumpEnabled != valueIsTrue("state"))
+    sendCommand(CMD_BTN_PUMP);
   
-  pumpState = valueIsOn("state");
-  String msg = "Turning pump " + toOnOff(pumpState);
+  String msg = "Sending pump command";
   okMessage(msg);
   Serial.println(msg);
 }
 
 void handle_heater() {
-  if (isArgumentMissing("state")) return;
+  if (checkArgument("state"))
+    return;
   
-  heaterState = valueIsOn("state");
-
-  String msg = "Turning heater " + toOnOff(heaterState);
+  if (heaterEnabled != valueIsTrue("state"))
+    sendCommand(CMD_BTN_HEAT);
+    
+  String msg = "Sending heater command";
   okMessage(msg);
   Serial.println(msg);
 }
 
 void handle_blower() {
-  if (isArgumentMissing("state")) return;
- 
-  blowerState = valueIsOn("state");
-  
-  String msg = "Turning blower " + toOnOff(blowerState);
+  if (checkArgument("state"))
+    return;
+
+  if (blowerEnabled != valueIsTrue("state"))
+    sendCommand(CMD_BTN_BLOW);
+    
+  String msg = "Sending blower command";
   okMessage(msg);
   Serial.println(msg);
 }
   
 void handle_temperature() {
-  if (isArgumentMissing("value")) return;
+  if (checkArgument("value")) 
+    return;
+      
+  int temp = getArg("value").toInt();
   
-  int desiredTemp = getArg("value").toInt();
+  if (!temperatureValid(temp, maxTemperature)) 
+    return;
+  
+  targetTemperature = temp;
+  setTempMessage(targetTemperature, "target temperature");
+}
 
-  bool aboveMax = desiredTemp > MAX_TEMP;
-  bool belowMin = desiredTemp < MIN_TEMP;
+void handle_command() {
+  if (checkArgument("command"))
+    return;
 
-  if (aboveMax || belowMin) {
-    String message = (String)(aboveMax ? "Max" : "Min") + " temperature is " + (String)(aboveMax ? String(MAX_TEMP) : String(MIN_TEMP));
-    errorMessage(message);
+  String commandStr =  getArg("command");
+  word command = strtol(commandStr.c_str(), 0, 16);
+
+  if (command = 0) {
+    errorMessage("Commands must be in the format 0x1234");
+    return;
+  } else if (command >= 0x4000) {
+    errorMessage("Commands must be less than 0x4000");
     return;
   }
 
-  targetTemperature = desiredTemp;
-  String msg = "Setting temperature to " + String(targetTemperature);
+  String msg = "Sending command " + commandStr;
+  sendCommand(command);
+  
+  okMessage(msg);
+}
+
+void handle_maxTemperature() {
+  if (checkArgument("value"))
+    return;
+  
+  int temp = getArg("value").toInt();
+ 
+  if (!temperatureValid(temp, MAX_TEMP))
+    return;
+  
+  maxTemperature = temp;
+
+  String msg = "max temperature";
+
+  if (targetTemperature > maxTemperature) {
+    targetTemperature = maxTemperature;
+    msg += " and target temperature";
+  }
+  
+  setTempMessage(maxTemperature, msg);
+}
+
+void setTempMessage(int temp, String tempType) {
+  String msg = "Setting " + tempType + " to " + String(temp);
   okMessage(msg);
   Serial.println(msg);
 }
 
-bool ledState = true;
+bool temperatureValid(int desiredTemp, int maxTemp) {
+  bool aboveMax = desiredTemp > maxTemp;
+  bool belowMin = desiredTemp < MIN_TEMP;
 
-void disableDataInterrupt() {
-  detachInterrupt(digitalPinToInterrupt(DATAINPIN));
+  if (aboveMax || belowMin) {
+    String message = (String)(aboveMax ? "Max" : "Min") + " temperature is " + (String)(aboveMax ? String(maxTemp) : String(MIN_TEMP));
+    errorMessage(message);
+    return false;
+  }
+
+  return true;
 }
 
-void enableDataInterrupt() {
-  attachInterrupt(digitalPinToInterrupt(DATAINPIN), handleDataInterrupt, RISING);
+void handle_panelLock() {
+  if (checkArgument("state"))
+    return;
+
+  panelLock = valueIsTrue("state");
+  
+  String msg = "Panel lock is " + toOnOff(panelLock);
+  okMessage(msg);
+  Serial.println(msg);
+}
+
+void handle_temperatureLock() {
+  if (checkArgument("state")) 
+    return;
+
+  temperatureLock = valueIsTrue("state");
+
+  String msg = "Temperature lock is " + toOnOff(temperatureLock);
+  okMessage(msg);
+  Serial.println(msg);
+}
+
+
+
+
+
+
+void handleButtonPress() {
+  sendTestCommand = true;
 }
 
 void handleDataInterrupt() {
-  disableDataInterrupt();
-
-  digitalWrite(DBGPIN, HIGH); //Debug high while checking start pulse length
-
-  //here the first long pulse has gone high
-  unsigned long startTime;
-  unsigned long endTime;
-  unsigned long pulseDuration;
-
-  //start timing first pulse
-  startTime = micros();
-
-  //Serial.print("Start Time is ");
-  //Serial.println(startTime);
-
-  //wait for the first long pulse to go low
-  while (digitalRead(DATAINPIN) && pulseDuration < startPulseMax)
-  { 
-    endTime = micros(); //update endTime to check if we have detected a too long pulse
-    pulseDuration = endTime - startTime;
-  }
-  digitalWrite(DBGPIN, LOW); //Debug low after checking start pulse length
-
-  //Serial.print("End time is ");
-  //Serial.println(endTime);
-
-
-  
-  //if start pulse wasn't the correct duration, get out
-  if (pulseDuration < startPulseMin || pulseDuration > startPulseMax) {
-
-    Serial.print("Timed out detecting start pulse @ ");
-    Serial.println(pulseDuration);
-    
-    if (!ignoreInvalidStartPulse) {
-      enableDataInterrupt();
-      return;
-    }
-  }
-
-  //here we have confirmed that the start pulse was ~4440us and the signal is now low (Start Confirm on diagram)
-
-  delayMicroseconds(dataStartDelay);
-
-  // (Button detect on diagram)
-
-  word data;
-
-  //Get the bits  
-  for (word i=0x2000; i > 0; i >>= 1)
-  {
-    delayMicroseconds(thirdBitPulse);
-    digitalWrite(DBGPIN, HIGH); //Debug signal high whilst checking the bit
-    
-    word  noti = ~i;
-    if (digitalRead(DATAINPIN))
-      data |= i;
-    else // else clause added to ensure function timing is ~balanced
-      data &= noti;
-
-    delayMicroseconds(thirdBitPulse);
-    digitalWrite(DBGPIN, LOW); //Debug signal low after checking the bit
-    delayMicroseconds(thirdBitPulse);
-  }
-
-
-  digitalWrite(DBGPIN, LOW); //Debug signal high after checking button is pressed
-  
-  //End getting the bits
-
-
-
-  enableDataInterrupt();
+  word data = receiveCommand();
+  decodeCommand(data); 
+  lastReceivedCommand = millis();
 }
 
 
 
-void setup(void)
-{
-  pinMode(LEDPIN, OUTPUT);    
-  pinMode(DATAINPIN, INPUT);
-  pinMode(DATAOUTPIN, OUTPUT);
-  pinMode(DBGPIN, OUTPUT);
-  enableDataInterrupt();
+void decodeCommand(word command) {
+  if (command == 0)
+    return; //todo - do something with an invalid command?!?!
   
-  Serial.begin(115200);  // Serial connection from ESP-01 via 3.3v console cable
+  if ((command >= CMD_ERROR_PKT1 && command <= CMD_END) || command == CMD_FLASH) {
+    Serial.println("Decoding status command");
+    decodeStatus(command);
+    return;
+  }
 
-  // -- Initializing the configuration.
-  iotWebConf.setStatusPin(LEDPIN);
+  if (command >= TEMP_104F && command <= TEMP_9C) {
+    Serial.println("Decoding temperature command");
+    temperature = decodeTemperature(command);
+    return;
+  }
+
+  if (command >= CMD_BTN_HEAT) {
+    Serial.println("Decoding button command");
+    decodeButton(command);
+    return;
+  }
+}
+
+void decodeButton(word command) {
+  String button;
+  
+  switch(command) {
+    case CMD_BTN_HEAT:
+      button = "Heater";
+      break;
+    case CMD_BTN_PUMP:
+      button = "Pump";
+      break;
+    case CMD_BTN_BLOW:
+      button = "Blower";
+      break;
+    case CMD_BTN_TEMP_DN:
+      button = "Temperature down";
+      break;
+    case CMD_BTN_TEMP_UP:
+      button = "Temperature up";
+      break;
+  }
+
+  Serial.print(button);
+  Serial.println(" button was pressed");
+}
+
+void decodeStatus(word command) {
+   pumpEnabled = false;
+   blowerEnabled = false;
+   heaterEnabled = false;
+   heaterHeating = false;
+
+   errorCode = 0;
+  
+   switch(command) {
+    case CMD_STATE_ALL_OFF_F:
+    case CMD_STATE_ALL_OFF_C:
+      break;
+    case CMD_STATE_PUMP_ON_C:
+    case CMD_STATE_PUMP_ON_F:
+      pumpEnabled = true;
+      break;
+    case CMD_STATE_BLOWER_ON_C:
+    case CMD_STATE_BLOWER_ON_F:
+      blowerEnabled = true;
+      break;
+    case CMD_STATE_PUMP_ON_HEATER_ON:
+      heaterEnabled = true;
+      break;
+    case CMD_STATE_PUMP_ON_HEATER_HEATING:
+      heaterEnabled = true;
+      heaterHeating = true;
+      break;
+    default:
+      errorCode = decodeError(command);
+  }
+}
+
+int decodeError(word command) {
+  String text;
+  int code = 0;
+  
+  switch (command) {
+    case CMD_ERROR_PKT1:
+      text = "Error 1,3,4 1st Packet, error to follow...";
+      break;
+    case CMD_ERROR_PKT2:
+      text = "Error 2,5,END 1st Packet, error to follow...";
+      break;
+    case CMD_ERROR_1:
+      code = 1;
+      text = "Flow sensor stuck in on state";
+      break;
+    case CMD_ERROR_2:
+      code = 2;
+      text = "Flow sensor stuck in off state";
+      break;
+    case CMD_ERROR_3:
+      code = 3;
+      text = "Water temperature below 4C";
+      break;
+    case CMD_ERROR_4:
+      code = 4;
+      text = "Water temperature above 50C";
+      break;
+    case CMD_ERROR_5:
+      code = 5;
+      text = "Unsuitable power supply";
+      break;
+  }
+
+  Serial.print("Error code ");
+  Serial.print(code);
+  Serial.print(" received - ");
+  Serial.println(text);
+
+  return code;
+}
+
+void testCommandCheck() {
+  if (sendTestCommand) {
+    sendTestCommand = false;
+    
+    Serial.println("Button Pressed!");
+    sendCommand(CMD_BTN_HEAT);
+  }
+}
+
+void targetTemperatureCheck(){
+  
+  if (pumpTargetTemperature != targetTemperature
+    && millis() - lastSentCommand > MILLIS_BETWEEN_COMMANDS
+    && millis() - lastReceivedCommand > MILLIS_WAIT_AFTER_COMMAND
+    && (lastReceivedCommand > 0 || ALLOW_SEND_WITHOUT_RECEIVE))
+  {
+    Serial.println("Adjusting target temperature");
+    if (pumpTargetTemperature < targetTemperature)
+        sendCommand(CMD_BTN_TEMP_UP);
+        
+    if (pumpTargetTemperature > targetTemperature)
+        sendCommand(CMD_BTN_TEMP_DN);
+  }
+}
+
+void autoRestartCheck() {
+  //todo - we need to check if the pump has sent the END command
+  if (autoRestart) {
+    //sendCommand(CMD_BTN_HEAT);
+  }
+}
+
+void setupBoard() {
+  pinMode(LED, OUTPUT);    
+  pinMode(DATA_IN, INPUT);
+  pinMode(DATA_OUT, OUTPUT);
+  pinMode(DBG, OUTPUT);
+  pinMode(BUTTON, INPUT);
+
+  attachInterrupt(digitalPinToInterrupt(DATA_IN), handleDataInterrupt, RISING); 
+  attachInterrupt(digitalPinToInterrupt(BUTTON), handleButtonPress, RISING);
+}
+
+void setupOTA() {
+  // Set Hostname.
+  String hostname(HOSTNAME);
+  hostname += String(ESP.getChipId(), HEX);
+  WiFi.hostname(hostname);
+  
+  ArduinoOTA.setHostname((const char *)hostname.c_str());
+  ArduinoOTA.onStart([]() {
+    Serial.println("Start");
+  });
+  ArduinoOTA.onEnd([]() {
+    Serial.println("\nEnd");
+  });
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+  });
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("Error[%u]: ", error);
+    if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
+    else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+    else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+    else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+    else if (error == OTA_END_ERROR) Serial.println("End Failed");
+  });
+  ArduinoOTA.begin();
+}
+
+void setupWebServer() {
+  iotWebConf.setStatusPin(LED);
+  iotWebConf.skipApStartup();
   iotWebConf.init();
 
   // -- Set up required URL handlers on the web server.
@@ -356,20 +574,41 @@ void setup(void)
   server.on("/config", []{ iotWebConf.handleConfig(); });
   server.onNotFound([](){ iotWebConf.handleNotFound(); });
 
-  server.on("/states", handle_states);
+  server.on("/status", handle_status);
   server.on("/autoRestart", HTTP_POST, handle_autoRestart);
   server.on("/pump", HTTP_POST, handle_pump);
   server.on("/heater", HTTP_POST, handle_heater);
   server.on("/blower", HTTP_POST, handle_blower);
-  server.on("/temperature", HTTP_POST, handle_temperature);
-  
+  server.on("/command", HTTP_POST, handle_command);
+  server.addHandler(new RouteHandler("/lock/panel", HTTP_POST, handle_panelLock));
+  server.addHandler(new RouteHandler("/lock/temperature", HTTP_POST, handle_temperatureLock));
+  server.addHandler(new RouteHandler("/temperature/target", HTTP_POST, handle_temperature));
+  server.addHandler(new RouteHandler("/temperature/max", HTTP_POST, handle_maxTemperature));
+
   server.begin();
   Serial.println("HTTP server started");
 }
 
+void setup(void)
+{
+  Serial.begin(115200);
+  Serial.println("Starting...");
+  
+  setupBoard();
+  setupOTA();
+  setupWebServer();
+}
+
 void loop(void)
 {  
-  // -- doLoop should be called as frequently as possible.
-  iotWebConf.doLoop();
+  iotWebConf.doLoop(); // doLoop should be called as frequently as possible.
   server.handleClient();
+  ArduinoOTA.handle();
+  yield();
+  
+  testCommandCheck();
+  #ifndef DISABLE_TARGET_TEMPERATURE
+  targetTemperatureCheck();
+  #endif
+  autoRestartCheck();
 } 

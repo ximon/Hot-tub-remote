@@ -16,12 +16,15 @@ The following URIs are available:
 
 |Uri|Method|Sample data|
 |--|:--:|--|
-| /autoRestart | POST | `{ "state":"on" }` |
-| /pump | POST | `{ "state": "on" }` |
-| /blower | POST | `{ "state": "on" }` |
-| /temperature | POST | `{ "value": 37, "max" : 38 }` |
-| /locks | POST | `{ "panel": "on", "temperature": "on" }` |
-| /states | GET  | `{ "autoRestart":"off", "pump":"off", "blower":"off", "heater":"off", "temperature":37, "targetTemperature":37 }` |
+| /autoRestart | POST | `{ "state": true }` |
+| /pump | POST | `{ "state": true }` |
+| /blower | POST | `{ "state": true }` |
+| /heater | POST | `{ "state": true}
+| /temperature/target | POST | `{ "value": 37 }` |
+| /temperature/max | POST | `{"value": 40 }` |
+| /lock/panel | POST | `{ "state": true }` |
+| /lock/temperature | POST | `{ "state": true }` |
+| /status | GET  | `{ "autoRestart": true, "pumpEnabled": true, "blowerEnabled": true, "heaterEnabled": true, "heaterHeating": true, "temperature": 35, "targetTemperature": 37, "maxTemperature": 40, "panelLock": true, "temperatureLock": true, "errorCode": 0 }` |
 
 ## Controller interface schematic
 ![Interface circuit](https://raw.githubusercontent.com/ximon/Hot-tub-remote/master/Interface.png "Interface circuit")
