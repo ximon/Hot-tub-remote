@@ -1,0 +1,66 @@
+<html>
+	<head>
+		<script type="text/javascript">
+			const ip = '192.168.0.44';
+		
+			async function sendCommand(command) {
+				await post(`command?command=${command}`);
+			}
+		
+			async function post(uri) {
+				return await http(uri, 'POST');
+			}
+		
+			async function http(uri, method) {
+				try {
+					var response = await fetch(`http://${ip}/${uri}`, {	
+						method: 'POST', 
+						mode: 'cors',
+						cache: 'no-cache',
+						headers: {
+							'Content-Type': 'text/plain',
+						}
+					});
+			
+					var data = response.ok ? (JSON.stringify(await response.json(), null, 2)) : "ERROR: " + response.statusText;
+					document.getElementById("response").innerHTML = data;
+					
+				} catch(err) {
+					alert(err);
+				}		
+			}				
+				
+				
+			async function device(deviceType, state) {
+				await post(`${deviceType}?state=${state}`);
+			}
+
+
+			async function getStatus() {
+				await http('status', 'GET');
+			}
+			
+		</script>
+	</head>
+<body>
+Heater
+<button onclick='device("heater", true)')>On</button>
+<button onclick='device("heater", false)')>Off</button><br />
+Pump
+<button onclick='device("pump", true)'>On</button>
+<button onclick='device("pump", false)'>Off</button><br />
+Blower
+<button onclick='device("blower", true)'>On</button>
+<button onclick='device("blower", false)'>Off</button><br />
+
+<button onclick='sendCommand("0x3A30");'>Temp Up</button><br />
+<button onclick='sendCommand("0x3840");'>Temp Down</button><br />
+
+
+<button onclick='getStatus()'>Get Status</button>
+
+
+<pre id="response" style="border: solid black 1px;"></pre>
+
+</body>
+</html>
