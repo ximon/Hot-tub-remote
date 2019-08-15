@@ -1,3 +1,6 @@
+#ifndef COMMANDS_H
+#define COMMANDS_H
+
 #define CMD_STATE_ALL_OFF_F 0x210
 #define CMD_STATE_ALL_OFF_C 0x283
 #define CMD_STATE_PUMP_ON_F 0x215
@@ -23,3 +26,5 @@
 #define CMD_BTN_BLOW    0x3900
 #define CMD_BTN_TEMP_UP 0x3A30
 #define CMD_BTN_PUMP    0x3C00
+
+#endif

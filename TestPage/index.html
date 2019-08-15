@@ -25,7 +25,7 @@
 			async function http(uri, method) {
 				try {
 					var response = await fetch(`http://${ip}/${uri}`, {	
-						method: 'POST', 
+						method: method, 
 						mode: 'cors',
 						cache: 'no-cache',
 						headers: {
