@@ -24,7 +24,7 @@ The following URIs are available:
 | /temperature/max | POST | `{ "value": 40 }` |
 | /lock/panel | POST | `{ "state": true }` |
 | /lock/temperature | POST | `{ "state": true }` |
-| /status | GET  | `
+| /status | GET  | ```
 { 
 	"currentState": {
 		"pump": true, 
@@ -45,7 +45,7 @@ The following URIs are available:
 	"temperatureLock": true,
 	"maxTemperature": 40,
 	"errorCode": 0
-}` |
+}``` |
 
 ## Controller interface schematic
 ![Interface circuit](https://raw.githubusercontent.com/ximon/Hot-tub-remote/master/Interface.png "Interface circuit")
