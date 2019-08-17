@@ -21,10 +21,10 @@
 #define CMD_ERROR_4 0x9E4
 #define CMD_ERROR_5 0x9E9
 
-#define CMD_BTN_HEAT    0x382F
-#define CMD_BTN_TEMP_DN 0x3840
-#define CMD_BTN_BLOW    0x3900
-#define CMD_BTN_TEMP_UP 0x3A30
-#define CMD_BTN_PUMP    0x3C00
+#define CMD_BTN_HEAT    0x182F
+#define CMD_BTN_TEMP_DN 0x1840
+#define CMD_BTN_BLOW    0x1900 
+#define CMD_BTN_TEMP_UP 0x1A30
+#define CMD_BTN_PUMP    0x1C00
 
 #endif
