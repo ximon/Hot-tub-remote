@@ -8,7 +8,7 @@ The following features can be controlled:
 * Adjust temperature and max temperature
 * View pump, heater and bubbles status
 * View current temperature
-* Lock control panel - revert any changes made by the control panel
+* Lock temperature setting - revert any changes made by the control panel
 * Auto-restart - the pump turns off after 24H, this will re-start the pump automatically
 
 ## Web API
@@ -21,10 +21,9 @@ The following URIs are available:
 | /blower | POST | `{ "state": true }` |
 | /heater | POST | `{ "state": true}` |
 | /temperature/target | POST | `{ "value": 37 }` |
-| /temperature/max | POST | `{ "value": 40 }` |
-| /lock/panel | POST | `{ "state": true }` |
-| /lock/temperature | POST | `{ "state": true }` |
-| /status | GET  | `{ "currentState": { "pump": true,  "blower": true,  "heater": true,  "heating": true, "temperature": 35 }, "targetState": { "pump": true, "blower": true, "heater": true, "heating": true,  "temperature": 35 }, "autoRestart": true, "panelLock": true,  "temperatureLock": true, "maxTemperature": 40, "errorCode": 0 }` |
+| /temperature/limit | POST | `{ "value": 40 }` |
+| /temperature/lock | POST | `{ "state": true }` |
+| /status | GET  | `{ "currentState": { "pumpState": 1, "temperature": 35 }, "targetState": { "pumpState": 3, temperature": 35 }, "autoRestart": true, "temperatureLock": true, "limitTemperature": 40, "errorCode": 0 }` |
 
 ## Controller interface schematic
 ![Interface circuit](https://raw.githubusercontent.com/ximon/Hot-tub-remote/master/Interface.png "Interface circuit")

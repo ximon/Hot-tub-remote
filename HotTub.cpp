@@ -4,6 +4,7 @@
 #include <Arduino.h>
 
 //todo - extract Serial.print lines to a debug function that can be handles externally.
+//#define DISABLE_TARGET_TEMPERATURE
 
 HotTub::HotTub(int dataInPin, int dataOutPin, int debugPin) {
   this->dataInPin = dataInPin;
@@ -18,59 +19,91 @@ HotTub::HotTub(int dataInPin, int dataOutPin, int debugPin) {
   this->debugPin = debugPin;
   this->debugPinBit = 1 << debugPin;
 
-  currentState = new HotTubState();
-  targetState = new HotTubState();
+  currentState = new CurrentState();
+  targetState = new TargetState();
+
+  currentState->pumpState = PUMP_UNKNOWN;
+
+  targetState->pumpState = PUMP_UNKNOWN;
+  targetState->targetTemperature = INIT_TEMP;
 }
 
-HotTubState* HotTub::getCurrentState() {
-  return currentState;
-}
+/*
+ *  State Management
+ */
 
 //todo - change this to return a copy of the array as we don't want external code changing its state!
-HotTubState* HotTub::getTargetState() {
+CurrentState* HotTub::getCurrentState() {
+  return currentState;;
+}
+
+TargetState* HotTub::getTargetState() {
   return targetState;
 }
 
-
-
-void HotTub::maximumTemperature(int temperature, bool isCelsius) {
-  limitTemperature = temperature;
-  limitTemperatureIsCelsius = isCelsius;
+void HotTub::setTargetState(int newState) {
+  if(targetState->pumpState != newState) {
+    targetState->pumpState = newState;
+    stateChanged(targetState->pumpState, newState);
+  }
 }
 
-int HotTub::getMaximumTemperature() {
+void HotTub::setTargetTemperature(int temp) {
+  targetState->targetTemperature = temp;
+}
+
+void HotTub::setLimitTemperature(int temp) {
+  limitTemperature = temp;
+  
+  if (targetState->targetTemperature > temp) {
+    targetState->targetTemperature = temp;
+  }
+}
+
+int HotTub::getLimitTemperature() {
   return limitTemperature;
-}
-
-void HotTub::temperatureLock(bool state) {
-  temperatureLockEnabled = state;
-}
-
-bool HotTub::isTemperatureLockEnabled() {
-  return temperatureLockEnabled;
-}
-
-void HotTub::panelLock(bool state) {
-  controlPanelLockEnabled = state;
-}
-
-bool HotTub::isPanelLockEnabled() {
-  return controlPanelLockEnabled;
-}
-
-void HotTub::autoRestart(bool state) {
-  autoRestartEnabled = state;
-}
-
-bool HotTub::isAutoRestartEnabled() {
-  return autoRestartEnabled;
 }
 
 int HotTub::getErrorCode() {
   return currentState->errorCode;
 }
 
-void HotTub::sendCommand(word command) {
+
+
+
+/*
+ *  Commands
+ */
+
+bool HotTub::queueCommand(word command) {
+  if (commandQueueCount + 1 > MAX_COMMANDS) {
+    Serial.println("Too many commands in the queue, current queue is:");
+
+    for (int i = 0; i < commandQueueCount; i++) {
+      Serial.print("   ");
+      Serial.print(i);
+      Serial.print(" = 0x");
+      Serial.println(commandQueue[i], HEX);
+    }
+    
+    return false;
+  }
+  
+  commandQueue[commandQueueCount++] = command;
+  return true;
+}
+
+void HotTub::processCommandQueue() {
+  if (commandQueueCount == 0)
+    return;
+
+  word command = commandQueue[0];
+
+  for (int i = 1; i < commandQueueCount; i++) {
+    commandQueue[i-1] = commandQueue[i];
+  }
+  commandQueueCount--;
+
   Serial.print("Sending 0x");
   Serial.println(command, HEX);
 
@@ -118,6 +151,10 @@ void HotTub::sendCommand(word command) {
   GPOC = dataOutPinBit;
   GPOC = debugPinBit;
 
+  if (command == CMD_BTN_TEMP_DN || command == CMD_BTN_TEMP_UP) {
+    temperatureDestination = TEMP_TARGET;
+  }
+
   os_intr_unlock();
   interrupts();
   GPOS = ledPinBit;
@@ -126,42 +163,65 @@ void HotTub::sendCommand(word command) {
 }
 
 void HotTub::dataAvailable() {
-  word data = receiveCommand();
-  decodeCommand(data); 
-  lastReceivedCommand = millis();
+
+  setInterrupt(false, FALLING);
+  
+  if (digitalRead(dataInPin)) {
+    pulseStartTime = micros();
+    GPOS = debugPinBit; //Debug high while checking start pulse length    
+    setInterrupt(true, FALLING);
+  } else {
+    unsigned long pulseDuration = micros() - pulseStartTime;
+    GPOC = debugPinBit; //Debug low after checking start pulse length
+    
+    if (!IGNORE_INVALID_START_PULSE && (pulseDuration < START_PULSE_MIN || pulseDuration > START_PULSE_MAX)) {
+      Serial.print("Timed out detecting start pulse @ ");
+      Serial.println(pulseDuration);
+    } else {
+      word command = receiveCommand();
+      handleCommand(command); 
+    }
+    
+    setInterrupt(true, RISING);
+  }
+}
+
+String HotTub::stateToString(int pumpState) {
+  switch (currentState->pumpState){
+    case PUMP_OFF:            return "Off";
+    case PUMP_FILTERING:      return "Filtering";
+    case PUMP_HEATING:        return "Heating";
+    case PUMP_HEATER_STANDBY: return "Heater on Standby";
+    case PUMP_BUBBLES:        return "bubbles";
+    default:                  return "UNKNOWN!!!";
+  }
+}
+
+String HotTub::errorToString(int errorCode) {
+  switch (errorCode) {
+    case 1:  return "Flow sensor stuck in on state";
+    case 2:  return "Flow sensor stuck in off state";
+    case 3:  return "Water temperature below 4C";
+    case 4:  return "Water temperature above 50C";
+    case 5:  return "Unsuitable power supply";
+    default: return "UNKNOWN!!!";
+  }
+}
+
+String HotTub::buttonToString(int buttonCommand) {
+   switch(buttonCommand) {
+    case CMD_BTN_HEAT:    return "Heater";
+    case CMD_BTN_PUMP:    return "Pump";
+    case CMD_BTN_BLOW:    return "Blower";
+    case CMD_BTN_TEMP_DN: return "Temperature down";
+    case CMD_BTN_TEMP_UP: return "Temperature up";
+    default:              return "UNKNOWN!!!";
+  }
 }
 
 word HotTub::receiveCommand(){
     noInterrupts();
     os_intr_lock();
-    
-    GPOS = debugPinBit; //Debug high while checking start pulse length
-    
-    //start timing first pulse
-    unsigned startTime = micros();
-    unsigned long endTime;
-    unsigned long pulseDuration;
-  
-    //wait for the first long pulse to go low
-    while (digitalRead(dataInPin) && pulseDuration < START_PULSE_MAX)
-    { 
-      endTime = micros(); //update endTime to check if we have detected a too long pulse
-      pulseDuration = endTime - startTime;
-    }
-    GPOC = debugPinBit; //Debug low after checking start pulse length
-  
-    #ifndef IGNORE_INVALID_START_PULSE
-    if (pulseDuration < START_PULSE_MIN || pulseDuration > START_PULSE_MAX) {
-      os_intr_unlock();
-      interrupts();
-  
-      Serial.print("Timed out detecting start pulse @ ");
-      Serial.println(pulseDuration);
-  
-      lastReceivedCommand = millis();
-      return 0;
-    }
-    #endif
   
     //here we have confirmed that the start pulse was ~4440us and the signal is now low (Start Confirm on diagram)
   
@@ -189,136 +249,203 @@ word HotTub::receiveCommand(){
     }
     //End getting the bits
   
+    lastReceivedCommand = millis();
+    //Serial.print("Received 0x");
+    //Serial.print(data, HEX);
+
     os_intr_unlock();
     interrupts();
   
-    lastReceivedCommand = millis();
-  
-    Serial.print("Received 0x");
-    Serial.println(data, HEX);
-    
     return data;
   }
 
-void HotTub::decodeCommand(word command) {
-  if (command == 0)
-    return; //todo - do something with an invalid command?!?!
+void HotTub::handleCommand(word command) {
+  //Serial.print(" - ");
   
+  if (command == 0) {
+    Serial.print("Invalid command received");
+    return;
+  }
+
+  if (command >= CMD_ERROR_4 && command <= CMD_ERROR_1) {
+    handleReceivedError(command);
+    return;
+  }
+
   if ((command >= CMD_ERROR_PKT1 && command <= CMD_END) || command == CMD_FLASH) {
-    Serial.println("Decoding status command");
-    decodeStatus(command);
+    handleReceivedStatus(command);
     return;
   }
 
   if (command >= TEMP_104F && command <= TEMP_9C) {
-    Serial.println("Decoding temperature command");
-    currentState->temperature = decodeTemperature(command);
+    handleReceivedTemperature(command);
     return;
   }
 
   if (command >= CMD_BTN_HEAT) {
-    Serial.println("Decoding button command");
-    decodeButton(command);
+    handleReceivedButton(command);
     return;
   }
 }
 
-void HotTub::decodeButton(word command) {
-  String button;
-  
-  switch(command) {
-    case CMD_BTN_HEAT:
-      button = "Heater";
+void HotTub::handleReceivedError(word command) {
+  decodeError(command);
+   
+  if (currentState->errorCode > 0) {
+    Serial.print("Error code ");
+    Serial.print(currentState->errorCode);
+    Serial.println(" received");
+  }
+}
+
+void HotTub::handleReceivedStatus(word command) {
+  //Serial.print("Decoding status command, ");
+  decodeStatus(command);
+
+  //Serial.print("state is : ");
+  //Serial.println(stateToString(currentState->pumpState));
+}
+
+void HotTub::handleReceivedTemperature(word command) {
+  //Serial.print("Decoding temperature command, ");
+  int temperature = decodeTemperature(command);
+    
+  switch (temperatureDestination) {
+    case TEMP_CURRENT:
+      currentState->temperature = temperature;
+      //Serial.print("Temperature is ");
+      //Serial.println(currentState->temperature);
+      break;
+    case TEMP_TARGET:
+      tempIgnoreStart = millis();
+      temperatureDestination = TEMP_IGNORE;
+      
+      currentState->targetTemperature = temperature;
+      //Serial.print("Target temperature is ");
+      //Serial.println(currentState->targetTemperature);
+      break;
+    case TEMP_IGNORE:
+      if (millis() > tempIgnoreStart + TEMP_IGNORE_TIME) {
+        temperatureDestination = TEMP_CURRENT;
+        //Serial.println("Next reading will be for the current temperature");
+      } else {
+        //Serial.println("Ignoring temperature reading...");
+      }
+      break;
+  }
+}
+
+void HotTub::handleReceivedButton(word command) {
+  Serial.print("Decoding button command,");
+
+  Serial.print(buttonToString(command));
+  Serial.println(" button was pressed");
+
+  switch (command) {
+    case CMD_BTN_TEMP_UP:
+    case CMD_BTN_TEMP_DN:
+      if (!temperatureLockEnabled) {
+        if (temperatureDestination == TEMP_TARGET || temperatureDestination == TEMP_IGNORE) {
+          Serial.print("Changing target temp from ");
+          Serial.print(targetState->targetTemperature);
+
+          int newTargetTemp = command == CMD_BTN_TEMP_UP
+            ? targetState->targetTemperature + 1 
+            : targetState->targetTemperature - 1;
+
+          if (newTargetTemp > limitTemperature) {
+            newTargetTemp = limitTemperature;
+          }
+
+          setTargetTemperature(newTargetTemp);
+          
+          Serial.print(" to ");
+          Serial.println(targetState->targetTemperature);
+        }
+      } else {
+        Serial.println("Temperature is locked, keeping current target temperature");
+      }
+
+      temperatureDestination = TEMP_TARGET;
+      
       break;
     case CMD_BTN_PUMP:
-      button = "Pump";
-      break;
-    case CMD_BTN_BLOW:
-      button = "Blower";
-      break;
-    case CMD_BTN_TEMP_DN:
-      button = "Temperature down";
-      break;
-    case CMD_BTN_TEMP_UP:
-      button = "Temperature up";
+      if (currentState->pumpState == PUMP_FILTERING || currentState->pumpState == PUMP_HEATER_STANDBY || currentState->pumpState == PUMP_HEATING) {
+        manuallyTurnedOff = true;
+      }
       break;
   }
 
-  Serial.print(button);
-  Serial.println(" button was pressed");
+  lastButtonPress = millis();
 }
 
 void HotTub::decodeStatus(word command) {
-   currentState->pumpEnabled = false;
-   currentState->blowerEnabled = false;
-   currentState->heaterEnabled = false;
-   currentState->heaterHeating = false;
+  int newState = currentState->pumpState;
 
-   currentState->errorCode = 0;
-  
-   switch(command) {
+  switch(command) {
     case CMD_STATE_ALL_OFF_F:
     case CMD_STATE_ALL_OFF_C:
+        newState = PUMP_OFF;
       break;
     case CMD_STATE_PUMP_ON_C:
     case CMD_STATE_PUMP_ON_F:
-      currentState->pumpEnabled = true;
+      newState = PUMP_FILTERING;
       break;
     case CMD_STATE_BLOWER_ON_C:
     case CMD_STATE_BLOWER_ON_F:
-      currentState->blowerEnabled = true;
+      newState = PUMP_BUBBLES;
       break;
     case CMD_STATE_PUMP_ON_HEATER_ON:
-      currentState->heaterEnabled = true;
+      newState = PUMP_HEATER_STANDBY;
       break;
     case CMD_STATE_PUMP_ON_HEATER_HEATING:
-      currentState->heaterEnabled = true;
-      currentState->heaterHeating = true;
+      newState = PUMP_HEATING;
       break;
-    default:
-      currentState->errorCode = decodeError(command);
+    case CMD_FLASH:
+      break;
+  }
+
+  if (targetState->pumpState == PUMP_UNKNOWN)
+    targetState->pumpState = newState;
+
+  if (currentState->pumpState != newState) {
+    stateChanged(currentState->pumpState, newState);
+    currentState->pumpState = newState;
+    currentState->errorCode = 0;
   }
 }
 
-int HotTub::decodeError(word command) {
-  String text;
-  int code = 0;
+void HotTub::decodeError(word command) {
+  int errorCode = 0;
   
   switch (command) {
     case CMD_ERROR_PKT1:
-      text = "Error 1,3,4 1st Packet, error to follow...";
-      break;
     case CMD_ERROR_PKT2:
-      text = "Error 2,5,END 1st Packet, error to follow...";
       break;
     case CMD_ERROR_1:
-      code = 1;
-      text = "Flow sensor stuck in on state";
+      errorCode = 1;
       break;
     case CMD_ERROR_2:
-      code = 2;
-      text = "Flow sensor stuck in off state";
+      errorCode = 2;
       break;
     case CMD_ERROR_3:
-      code = 3;
-      text = "Water temperature below 4C";
+      errorCode = 3;
       break;
     case CMD_ERROR_4:
-      code = 4;
-      text = "Water temperature above 50C";
+      errorCode = 4;
       break;
     case CMD_ERROR_5:
-      code = 5;
-      text = "Unsuitable power supply";
+      errorCode = 5;
       break;
   }
 
-  Serial.print("Error code ");
-  Serial.print(code);
-  Serial.print(" received - ");
-  Serial.println(text);
-
-  return code;
+  if (errorCode > 0){
+    if (currentState->pumpState != PUMP_ERROR) {
+      stateChanged(currentState->pumpState, PUMP_ERROR);
+      currentState->pumpState = PUMP_ERROR;
+      currentState->errorCode = errorCode;
+    }
+  }
 }
 
 int HotTub::decodeTemperature(word command) {
@@ -363,45 +490,136 @@ int HotTub::decodeTemperature(word command) {
     case TEMP_97F: return 97;
     case TEMP_95F: return 95;
     case TEMP_93F: return 93;
+    case TEMP_92F: return 92;
+    case TEMP_90F: return 90;
+    case TEMP_88F: return 88;
+    case TEMP_86F: return 86;
+    case TEMP_84F: return 84;
+    case TEMP_83F: return 83;
+    case TEMP_81F: return 81;
+    case TEMP_79F: return 79;
+    case TEMP_77F: return 77;
+    case TEMP_75F: return 75;
+    case TEMP_74F: return 74;
+    case TEMP_72F: return 72;
+    case TEMP_70F: return 70;
+    case TEMP_66F: return 66;
+    case TEMP_65F: return 65;
+    case TEMP_63F: return 63;
+    case TEMP_61F: return 61;
+    case TEMP_59F: return 59;
+    case TEMP_57F: return 57;
+    case TEMP_56F: return 56;
+    case TEMP_54F: return 54;
+    case TEMP_52F: return 52;
   }
 }
 
+
+/*
+ * Target state checks
+ */
+
 void HotTub::autoRestartCheck() {
-  //todo - we need to check if the pump has sent the END command or the pump is off but the button hasn't been pressed
-  if (autoRestartEnabled) {
-    sendCommand(CMD_BTN_HEAT);
+    if (!manuallyTurnedOff && autoRestartEnabled && currentState->pumpState == PUMP_OFF && targetState->pumpState != PUMP_HEATING) {
+    Serial.println("Auto restarting...");
+    setTargetState(PUMP_HEATING);
   }
 }
 
 void HotTub::targetTemperatureCheck(){
-  if (currentState->temperature != targetState->temperature
-    && millis() - lastSentCommand > MILLIS_BETWEEN_COMMANDS
-    && millis() - lastReceivedCommand > MILLIS_WAIT_AFTER_COMMAND
-    && (lastReceivedCommand > 0 || ALLOW_SEND_WITHOUT_RECEIVE))
-  {
-    Serial.println("Adjusting target temperature");
+  if (millis() < lastButtonPress + TEMP_IGNORE_TIME)
+    return; //leave temperatures alone untill buttons aren't being pressed
 
-    if (currentState->temperature < targetState->temperature)
-        sendCommand(CMD_BTN_TEMP_UP);
+  //if the target temperature is 0 we need to send temperature button press so that the display blinks and shows us the target temperature
+  if (currentState->targetTemperature == 0 && millis() > TEMP_IGNORE_TIME) {
+    Serial.print("Getting current target temperature...");
+    queueCommand(CMD_BTN_TEMP_DN);
+  }
+
+  #ifndef DISABLE_TARGET_TEMPERATURE 
+  if (currentState->targetTemperature > 0
+    && currentState->targetTemperature != targetState->targetTemperature)
+  {
+    if (currentState->targetTemperature < targetState->targetTemperature) {
+        Serial.println("Auto-Adjusting target temperature, up");
+        queueCommand(CMD_BTN_TEMP_UP);
+    }
         
-    if (currentState->temperature > targetState->temperature)
-        sendCommand(CMD_BTN_TEMP_DN);
+    if (currentState->targetTemperature > targetState->targetTemperature) {
+        Serial.println("Auto-Adjusting target temperature, down");
+        queueCommand(CMD_BTN_TEMP_DN);
+    }
+  }
+  #endif
+}
+
+void HotTub::targetStateCheck(){
+
+  if (millis() < lastSentCommand + BUTTON_SEND_DELAY)
+    return;
+
+  int pumpState = targetState->pumpState;
+  
+  if (currentState->pumpState == pumpState)
+    return;
+
+
+  if (pumpState == PUMP_OFF) {
+    queueCommand(CMD_BTN_PUMP);
+    return;
+  }
+
+  if (pumpState == PUMP_FILTERING) {
+    if (currentState->pumpState == PUMP_HEATING || currentState->pumpState == PUMP_HEATER_STANDBY)
+      queueCommand(CMD_BTN_HEAT); //to turn off the heat
+    if (currentState->pumpState == PUMP_OFF)
+      queueCommand(CMD_BTN_PUMP); //to turn on the pump
+    return;
+  }
+
+  if (pumpState == PUMP_HEATING || pumpState == PUMP_HEATER_STANDBY) {
+    if (currentState->pumpState == PUMP_BUBBLES) {
+      queueCommand(CMD_BTN_BLOW);
+      return;
+    }
+      
+    if (!manuallyTurnedOff && currentState->pumpState != PUMP_HEATING && currentState->pumpState != PUMP_HEATER_STANDBY)
+      queueCommand(CMD_BTN_HEAT);
+  }
+
+  if (pumpState == PUMP_BUBBLES) {
+    queueCommand(CMD_BTN_BLOW);
+    return;
   }
 }
 
-void HotTub::setup(void (&onStateChange)()) {
+/*
+ * Setup and loop
+ */
+
+void HotTub::setup(void (&onStateChange)(int oldState, int newState), void (&onSetInterrupt)(bool enable, int direction), void (&eventLogger)(String event)) {
   stateChanged = onStateChange;
+  setInterrupt = onSetInterrupt;
+  logger = eventLogger;
 
   pinMode(ledPin, OUTPUT);    
   pinMode(dataInPin, INPUT);
   pinMode(dataOutPin, OUTPUT);
   pinMode(debugPin, OUTPUT);
+
+  setInterrupt(true, RISING);
 }
 
 void HotTub::loop() {
   autoRestartCheck();
 
-  if (!DISABLE_TARGET_TEMPERATURE) {
-    targetTemperatureCheck();
-  }
+  if (millis() < lastSentCommand + MILLIS_BETWEEN_COMMANDS
+    || millis() < lastReceivedCommand + MILLIS_WAIT_AFTER_COMMAND
+    || (lastReceivedCommand == 0 && !ALLOW_SEND_WITHOUT_RECEIVE))
+    return; //wait for ok to send
+
+  targetTemperatureCheck();
+  targetStateCheck();
+  processCommandQueue();
 }
