@@ -23,6 +23,7 @@
 			}
 		
 			async function http(uri, method) {
+				setText("");
 				try {
 					var response = await fetch(`http://${ip}/${uri}`, {	
 						method: method, 
@@ -33,13 +34,17 @@
 						}
 					});
 			
-					var data = response.ok ? (JSON.stringify(await response.json(), null, 2)) : "ERROR: " + response.statusText;
-					document.getElementById("response").innerHTML = data;
+					var data = JSON.stringify(await response.json(), null, 2);
+					setText((response.ok ? "SUCCESS: " : "ERROR: ") + data);
 					
 				} catch(err) {
-					alert(err);
+					setText(err);
 				}		
 			}				
+			
+			function setText(text) {
+				document.getElementById("response").innerHTML = text;
+			}
 				
 			async function device(deviceType, state) {
 				await post(`${deviceType}?state=${state}`);
@@ -74,11 +79,33 @@
 		</div>
 
 		<div>
-			<button onclick='sendCommand("0x3A30");'>Temp Up</button><br />
+			Temp
+			<button onclick='sendCommand("0x1A30");'>Up</button>
+			<button onclick='sendCommand("0x1840");'>Down</button>
+		</div>
+		
+		<div>
+			Temp
+			<button onclick='post("temperature/target?value=40")'>40</button>
+			<button onclick='post("temperature/target?value=37")'>37</button>
+		</div>
+<hr/>
+		<div>
+			Max Temp
+			<button onclick='post("temperature/max?value=40")'>40</button>
+			<button onclick='post("temperature/max?value=37")'>37</button>
 		</div>
 
 		<div>
-			<button onclick='sendCommand("0x3840");'>Temp Down</button><br />
+			Auto-Restart
+			<button onclick='post("autoRestart?state=true")'>on</button>
+			<button onclick='post("autoRestart?state=false")'>off</button>
+		</div>
+		
+		<div>
+			Temperature-Lock
+			<button onclick='post("temperature/lock?state=true")'>on</button>
+			<button onclick='post("temperature/lock?state=false")'>off</button>
 		</div>
 
 		<div>
