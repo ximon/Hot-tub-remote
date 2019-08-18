@@ -93,6 +93,12 @@ bool HotTub::queueCommand(word command) {
   return true;
 }
 
+void HotTub::postProcessCommand(word command) {
+  if (command == CMD_BTN_TEMP_UP || command == CMD_BTN_TEMP_DN) {
+          temperatureDestination = TEMP_TARGET; //to capture the newly changed target temperature
+  } 
+}
+
 void HotTub::processCommandQueue() {
   if (commandQueueCount == 0)
     return;
@@ -160,6 +166,8 @@ void HotTub::processCommandQueue() {
   GPOS = ledPinBit;
 
   lastSentCommand = millis();
+
+  postProcessCommand(command);
 }
 
 void HotTub::dataAvailable() {
@@ -192,7 +200,7 @@ String HotTub::stateToString(int pumpState) {
     case PUMP_FILTERING:      return "Filtering";
     case PUMP_HEATING:        return "Heating";
     case PUMP_HEATER_STANDBY: return "Heater on Standby";
-    case PUMP_BUBBLES:        return "bubbles";
+    case PUMP_BUBBLES:        return "Bubbles";
     default:                  return "UNKNOWN!!!";
   }
 }
@@ -294,7 +302,8 @@ void HotTub::handleReceivedError(word command) {
   if (currentState->errorCode > 0) {
     Serial.print("Error code ");
     Serial.print(currentState->errorCode);
-    Serial.println(" received");
+    Serial.print(" received - ");
+    Serial.println(errorToString(currentState->errorCode));
   }
 }
 
@@ -340,6 +349,8 @@ void HotTub::handleReceivedButton(word command) {
 
   Serial.print(buttonToString(command));
   Serial.println(" button was pressed");
+
+  lastButton = command;
 
   switch (command) {
     case CMD_BTN_TEMP_UP:

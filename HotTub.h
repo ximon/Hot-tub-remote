@@ -104,6 +104,7 @@ class HotTub
 
     int temperatureDestination = TEMP_CURRENT;
     bool manuallyTurnedOff; //indicates to the autoRestart code that the pump was turned off via the button / command, rather than the 24h timeout
+    word lastButton; //to be used instead of manuallyTurnedOff to check if the pump was turned off with the control panel
     int limitTemperature = MAX_TEMP;//limits the temperature that can be set to via the control panel
     bool limitTemperatureIsCelsius;
   
@@ -134,6 +135,7 @@ class HotTub
     bool timingStartPulse;
 
     void processCommandQueue();
+    void postProcessCommand(word command);
     
     unsigned long lastSentCommand;
     unsigned long lastReceivedCommand;
