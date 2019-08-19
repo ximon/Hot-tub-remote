@@ -70,11 +70,11 @@ void handle_root() {
   okHtml(s);
 }
 
-void handleDataInterrupt() {
+ICACHE_RAM_ATTR void handleDataInterrupt() {
   hotTub.dataAvailable();
 }
 
-void handleButtonPress() {
+ICACHE_RAM_ATTR void handleButtonPress() {
   sendTestCommand = true;
 }
 
