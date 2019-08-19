@@ -171,26 +171,28 @@ void HotTub::processCommandQueue() {
 }
 
 void HotTub::dataAvailable() {
-
   setInterrupt(false, FALLING);
   
   if (digitalRead(dataInPin)) {
     pulseStartTime = micros();
     GPOS = debugPinBit; //Debug high while checking start pulse length    
-    setInterrupt(true, FALLING);
+    setInterrupt(true, FALLING); //reset the interrupt to detect the end of the start pulse
   } else {
+    word command;
     unsigned long pulseDuration = micros() - pulseStartTime;
     GPOC = debugPinBit; //Debug low after checking start pulse length
-    
+
     if (!IGNORE_INVALID_START_PULSE && (pulseDuration < START_PULSE_MIN || pulseDuration > START_PULSE_MAX)) {
       Serial.print("Timed out detecting start pulse @ ");
       Serial.println(pulseDuration);
     } else {
-      word command = receiveCommand();
-      handleCommand(command); 
+      command = receiveCommand();
     }
-    
-    setInterrupt(true, RISING);
+
+    setInterrupt(true, RISING); //reset the interrupt to detect the start of the next start pulse
+
+    if (command > 0 )
+      handleCommand(command); 
   }
 }
 
@@ -258,11 +260,12 @@ word HotTub::receiveCommand(){
     //End getting the bits
   
     lastReceivedCommand = millis();
-    //Serial.print("Received 0x");
-    //Serial.print(data, HEX);
 
     os_intr_unlock();
     interrupts();
+
+    //Serial.print("Received 0x");
+    //Serial.print(data, HEX);
   
     return data;
   }
