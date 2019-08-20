@@ -54,13 +54,13 @@ void sendCommand(word command) {
     {
       GPOS = DATA_OUT_BIT;
       start = micros();
-      while(micros() - start <= BIT_PULSE - 40) {;} //confirmed
+      while(micros() - start <= BIT_PULSE) {;} //confirmed
     }
     else
     {
       GPOC = DATA_OUT_BIT; 
       start = micros();
-      while(micros() - start < BIT_PULSE + 40) {;} //confirmed
+      while(micros() - start < BIT_PULSE) {;} //confirmed
     }    
   }
 
