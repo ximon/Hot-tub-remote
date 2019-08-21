@@ -37,12 +37,12 @@ void sendCommand(word command) {
   GPOS = DATA_OUT_BIT; //Start of the start pulse
 
   start = micros();
-  while(micros() - start <= START_PULSE - 50) {;} //confirmed
+  while(micros() - start <= START_PULSE) {;} //confirmed
 
   GPOC = DATA_OUT_BIT; //End of the start pulse, start of the button pulse
   
   start = micros();
-  while (micros() - start <= BUTTON_PULSE + 32) {;} //confirmed
+  while (micros() - start <= BUTTON_PULSE) {;} //confirmed
   //End of the button pulse, start of the data pulses
 
   GPOS = DBG_BIT;
@@ -54,13 +54,13 @@ void sendCommand(word command) {
     {
       GPOS = DATA_OUT_BIT;
       start = micros();
-      while(micros() - start <= BIT_PULSE - 40) {;} //confirmed
+      while(micros() - start <= BIT_PULSE) {;} //confirmed
     }
     else
     {
       GPOC = DATA_OUT_BIT; 
       start = micros();
-      while(micros() - start < BIT_PULSE + 40) {;} //confirmed
+      while(micros() - start < BIT_PULSE) {;} //confirmed
     }    
   }
 

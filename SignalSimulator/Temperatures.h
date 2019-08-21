@@ -39,6 +39,7 @@
 #define TEMP_97F  0xA79
 #define TEMP_95F  0xA83
 #define TEMP_93F  0xA89
+#define TEMP_88F  0xA9D
 /*
 #define TEMP_92F  0x
 #define TEMP_90F  0x
