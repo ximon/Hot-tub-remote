@@ -1,4 +1,4 @@
-//todo - test waiting ~20ms after a comand has ended to send any commands
+    //todo - test waiting ~20ms after a comand has ended to send any commands
 
 //getting target temp at startup works
 //temperature lock works
@@ -7,7 +7,6 @@
 //need to check target state changing and autorestart
 
 #define HOSTNAME "HotTubRemote"
-#define IOTWEBCONF_CONFIG_USE_MDNS
 
 #include <ArduinoJson.h>
 #include <IotWebConf.h>
@@ -39,7 +38,7 @@ IotWebConf iotWebConf(thingName, &dnsServer, &server, wifiInitialApPassword, CON
 
 File fsUploadFile;
 
-HotTub hotTub(DATA_IN, DATA_OUT, DBG);
+HotTub hotTub(DATA_IN, DATA_ENABLE, DBG);
 HotTubApi hotTubApi(&server, &hotTub);
 
 bool sendTestCommand = false;
@@ -70,22 +69,13 @@ void handle_root() {
   okHtml(s);
 }
 
-ICACHE_RAM_ATTR void handleDataInterrupt() {
-  hotTub.dataAvailable();
+void ICACHE_RAM_ATTR handleDataInterrupt() {
+  hotTub.dataInterrupt();
 }
 
-ICACHE_RAM_ATTR void handleButtonPress() {
+void ICACHE_RAM_ATTR handleButtonPress() {
   sendTestCommand = true;
 }
-
-void onSetInterrupt(bool enable, int direction) {
-  if (enable) {
-      attachInterrupt(digitalPinToInterrupt(DATA_IN), handleDataInterrupt, direction);
-  } else {
-      detachInterrupt(digitalPinToInterrupt(DATA_IN));
-  }
-}
-
 
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
   switch (type) {
@@ -100,7 +90,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
     case WStype_TEXT:                     // if new text data is received
       Serial.printf("[%u] get Text: %s\n", num, payload);
 
-      webSocket.sendTXT(num, "PIES!");
+      webSocket.sendTXT(num, "Received!");
       //webSocket.broadcastTXT("message here");
 
       break;
@@ -175,10 +165,13 @@ void handleFileUpload(){ // upload a new file to the SPIFFS
 
 void setupBoard() {
   pinMode(BUTTON, INPUT);
-  attachInterrupt(digitalPinToInterrupt(BUTTON), handleButtonPress, RISING);
-  
+  pinMode(DATA_IN, INPUT);
+  pinMode(DBG, OUTPUT);
+  pinMode(LED, OUTPUT);
+  pinMode(DATA_ENABLE, OUTPUT);
+ 
   iotWebConf.setStatusPin(LED);
-  iotWebConf.skipApStartup();
+  //iotWebConf.skipApStartup();
   iotWebConf.setupUpdateServer(&httpUpdater);
   iotWebConf.init();
 }
@@ -230,38 +223,37 @@ void setupWebSocket() {
 
 void setupSPIFFS() {
   SPIFFS.begin();
-  Serial.println("SPIFFS started. Contents:");
-  {
-    Dir dir = SPIFFS.openDir("/");
-    while (dir.next()) {
-      String fileName = dir.fileName();
-      size_t fileSize = dir.fileSize();
-      Serial.printf("\tFS File: %s, size: %s\r\n", fileName.c_str(), formatBytes(fileSize).c_str());
-    }
-    Serial.printf("\n");
-  }
 }
 
-void log(String event) {
-  webSocket.broadcastTXT(event);
-  //Serial.println(event);
+void enableInterrupts() {  
+  attachInterrupt(digitalPinToInterrupt(BUTTON), handleButtonPress, RISING);
+  attachInterrupt(digitalPinToInterrupt(DATA_IN), handleDataInterrupt, CHANGE);
 }
 
 void setup(void)
 {
   Serial.begin(115200);
+  Serial.println();
+  Serial.println();
   Serial.println("Starting...");
   
   setupBoard();
-  setupOTA();
-
-  setupSPIFFS();
-  
-  hotTub.setup(onStateChange, onSetInterrupt, log);
-  hotTubApi.setup();
 
   setupWebServer();
   setupWebSocket();
+
+  setupSPIFFS();
+  setupOTA();
+
+  
+  pinMode(3, OUTPUT); // Override default Serial initiation
+  digitalWrite(3,0); // GPIO3 = I2S data out
+  pinMode(D2, OUTPUT);
+  digitalWrite(D2, LOW);
+  hotTub.setup(onStateChange);
+  hotTubApi.setup();
+  
+  enableInterrupts();
 }
 
 void loop(void)
@@ -274,7 +266,6 @@ void loop(void)
   testCommandCheck();
   
   hotTub.loop();
-  yield();
 } 
 
 void testCommandCheck() {
