@@ -30,9 +30,7 @@ void sendCommand(word command) {
 
   unsigned start = micros();
 
-  GPOS = DBG_BIT;
   while(micros() - start < 100) {;}
-  GPOC = DBG_BIT;
 
   GPOS = DATA_OUT_BIT; //Start of the start pulse
 
@@ -45,7 +43,6 @@ void sendCommand(word command) {
   while (micros() - start <= BUTTON_PULSE) {;} //confirmed
   //End of the button pulse, start of the data pulses
 
-  GPOS = DBG_BIT;
   
   //Write the bits
   for (word bitPos = DATA_MASK; bitPos > 0; bitPos >>= 1)
@@ -65,7 +62,7 @@ void sendCommand(word command) {
   }
 
   GPOC = DATA_OUT_BIT;
-  GPOC = DBG_BIT;
+
 
   os_intr_unlock();
   interrupts();

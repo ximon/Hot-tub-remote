@@ -1,0 +1,159 @@
+EESchema Schematic File Version 4
+EELAYER 30 0
+EELAYER END
+$Descr A4 11693 8268
+encoding utf-8
+Sheet 1 1
+Title ""
+Date ""
+Rev ""
+Comp ""
+Comment1 ""
+Comment2 ""
+Comment3 ""
+Comment4 ""
+$EndDescr
+$Comp
+L Isolator:PC817 U1
+U 1 1 5D6EC97C
+P 5150 2950
+F 0 "U1" H 5150 3275 50  0000 C CNN
+F 1 "PC123" H 5150 3184 50  0000 C CNN
+F 2 "Package_DIP:DIP-4_W7.62mm" H 4950 2750 50  0001 L CIN
+F 3 "http://www.soselectronic.cz/a_info/resource/d/pc817.pdf" H 5150 2950 50  0001 L CNN
+	1    5150 2950
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	4800 2850 4850 2850
+Wire Wire Line
+	4600 2850 4400 2850
+Text Label 4400 2850 0    50   ~ 0
+Rx
+Wire Wire Line
+	4850 3050 4400 3050
+Text Label 4400 3050 0    50   ~ 0
+D2
+$Comp
+L power:VCC #PWR?
+U 1 1 5D6F0E03
+P 5550 2700
+F 0 "#PWR?" H 5550 2550 50  0001 C CNN
+F 1 "VCC" H 5567 2873 50  0000 C CNN
+F 2 "" H 5550 2700 50  0001 C CNN
+F 3 "" H 5550 2700 50  0001 C CNN
+	1    5550 2700
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	5450 3050 5500 3050
+Text Label 5700 3050 0    50   ~ 0
+DATA
+Text Label 4400 3400 0    50   ~ 0
+D1
+$Comp
+L power:GND #PWR?
+U 1 1 5D6F335B
+P 5150 3650
+F 0 "#PWR?" H 5150 3400 50  0001 C CNN
+F 1 "GND" H 5155 3477 50  0000 C CNN
+F 2 "" H 5150 3650 50  0001 C CNN
+F 3 "" H 5150 3650 50  0001 C CNN
+	1    5150 3650
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	5450 2850 5550 2850
+Wire Wire Line
+	5550 2700 5550 2850
+Connection ~ 5550 2850
+Wire Wire Line
+	5550 2850 5850 2850
+$Comp
+L Device:R_Small R2
+U 1 1 5D6F2079
+P 5150 3300
+F 0 "R2" H 5209 3346 50  0000 L CNN
+F 1 "1K" H 5209 3255 50  0000 L CNN
+F 2 "" H 5150 3300 50  0001 C CNN
+F 3 "~" H 5150 3300 50  0001 C CNN
+	1    5150 3300
+	1    0    0    -1  
+$EndComp
+$Comp
+L Device:R_Small R3
+U 1 1 5D6EE00F
+P 4700 2850
+F 0 "R3" V 4896 2850 50  0000 C CNN
+F 1 "220R" V 4805 2850 50  0000 C CNN
+F 2 "" H 4700 2850 50  0001 C CNN
+F 3 "~" H 4700 2850 50  0001 C CNN
+	1    4700 2850
+	0    -1   -1   0   
+$EndComp
+Text Label 5700 2850 0    50   ~ 0
+5V
+$Comp
+L Device:R_Small R1
+U 1 1 5D6F23A8
+P 5150 3500
+F 0 "R1" H 5209 3546 50  0000 L CNN
+F 1 "1K" H 5209 3455 50  0000 L CNN
+F 2 "" H 5150 3500 50  0001 C CNN
+F 3 "~" H 5150 3500 50  0001 C CNN
+	1    5150 3500
+	1    0    0    -1  
+$EndComp
+Connection ~ 5150 3400
+Connection ~ 5500 3050
+Wire Wire Line
+	5500 3050 5850 3050
+Wire Wire Line
+	5500 3150 5150 3150
+Wire Wire Line
+	5150 3150 5150 3200
+Wire Wire Line
+	5500 3150 5500 3050
+Wire Wire Line
+	4400 3400 5150 3400
+$Comp
+L power:VCC #PWR?
+U 1 1 5D70837B
+P 3950 3000
+F 0 "#PWR?" H 3950 2850 50  0001 C CNN
+F 1 "VCC" H 3967 3173 50  0000 C CNN
+F 2 "" H 3950 3000 50  0001 C CNN
+F 3 "" H 3950 3000 50  0001 C CNN
+	1    3950 3000
+	1    0    0    -1  
+$EndComp
+$Comp
+L power:GND #PWR?
+U 1 1 5D708717
+P 3950 3300
+F 0 "#PWR?" H 3950 3050 50  0001 C CNN
+F 1 "GND" H 3955 3127 50  0000 C CNN
+F 2 "" H 3950 3300 50  0001 C CNN
+F 3 "" H 3950 3300 50  0001 C CNN
+	1    3950 3300
+	1    0    0    -1  
+$EndComp
+$Comp
+L Device:CP C1
+U 1 1 5D708E3A
+P 3950 3150
+F 0 "C1" H 4068 3196 50  0000 L CNN
+F 1 "1000UF" H 4068 3105 50  0000 L CNN
+F 2 "" H 3988 3000 50  0001 C CNN
+F 3 "~" H 3950 3150 50  0001 C CNN
+	1    3950 3150
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	5150 3650 5150 3600
+Wire Wire Line
+	5150 3650 5850 3650
+Connection ~ 5150 3650
+Text Label 5700 3650 0    50   ~ 0
+GND
+$EndSCHEMATC

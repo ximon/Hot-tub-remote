@@ -22,11 +22,14 @@ SendReceive::SendReceive(int dataInPin, int dataEnablePin, int debugPin) {
   lastBitStartTime = 0;
 }
 
-void SendReceive::printMessageData() {
+void SendReceive::printMessageData(bool includeBreakdown) {
   int i;
 
   Serial.print("Data: 0x");
   Serial.println(receivedCommand, HEX);
+
+  if (!includeBreakdown)
+    return;
   
   for(i = 0; i < dataIndex; i++) {
     Serial.print(i);
@@ -63,7 +66,7 @@ void SendReceive::loop() {
               states[dataIndex] = lastBitState;
       }
       receivedCommand = decode(times, states);
-      //printMessageData();
+      //printMessageData(false);
       
       dataStart = 0;
       dataIndex = 0;
@@ -73,12 +76,7 @@ void SendReceive::loop() {
           states[eraseCount] = false;
       }
   }
-  
-  if (sentCommand > 0) {
-    onCommandSent(sentCommand);
-    sentCommand = 0;
-  }
-  
+    
   processIncomingCommand();
 
   //dont send if we haven't received anything yet
@@ -261,6 +259,8 @@ void SendReceive::processOutgoingCommandQueue() {
   Serial.println(commandQueueCount);
 
   sendCommand(command);
+
+  onCommandSent(command);
 }
 
 int SendReceive::getSendBitTime(int bitPos){

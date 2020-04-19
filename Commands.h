@@ -11,6 +11,9 @@
 #define CMD_STATE_PUMP_ON_HEATER_HEATING 0x2C7
 
 #define CMD_FLASH      0xBFF
+#define CMD_UNKNOWN    0xBAF //got this a
+#define CMD_UNKNOWN2   0xBC6 //
+#define CMD_UNKNOWN3   0xBC3 //
 #define CMD_END        0xA01
 #define CMD_ERROR_PKT1 0x1DF
 #define CMD_ERROR_PKT2 0x201

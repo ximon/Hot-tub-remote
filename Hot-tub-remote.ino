@@ -1,4 +1,6 @@
-    //todo - test waiting ~20ms after a comand has ended to send any commands
+//todo - test waiting ~20ms after a comand has ended to send any commands
+
+//todo - option to pull line high for a short period to reset disiplay controller on error?
 
 //getting target temp at startup works
 //temperature lock works
@@ -181,7 +183,7 @@ void setupOTA() {
   //String hostname();
   WiFi.hostname(HOSTNAME);
   
-  ArduinoOTA.setHostname(HOSTNAME);
+  ArduinoOTA.setHostname("HotTubRemote");
   ArduinoOTA.onStart([]() { Serial.println("Start"); });
   ArduinoOTA.onEnd([]() { Serial.println("\nEnd"); });
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
@@ -226,7 +228,7 @@ void setupSPIFFS() {
 }
 
 void enableInterrupts() {  
-  attachInterrupt(digitalPinToInterrupt(BUTTON), handleButtonPress, RISING);
+  attachInterrupt(digitalPinToInterrupt(BUTTON), handleButtonPress, FALLING);
   attachInterrupt(digitalPinToInterrupt(DATA_IN), handleDataInterrupt, CHANGE);
 }
 
@@ -245,7 +247,7 @@ void setup(void)
   setupSPIFFS();
   setupOTA();
 
-  
+  pinMode(D5, INPUT_PULLUP);
   pinMode(3, OUTPUT); // Override default Serial initiation
   digitalWrite(3,0); // GPIO3 = I2S data out
   pinMode(D2, OUTPUT);
@@ -273,7 +275,7 @@ void testCommandCheck() {
     sendTestCommand = false;
     
     Serial.println("Button Pressed!");
-    hotTub.autoRestartEnabled = !hotTub.autoRestartEnabled;
+    //hotTub.autoRestartEnabled = !hotTub.autoRestartEnabled;
     //onStateChange(0,1);
   }
 }

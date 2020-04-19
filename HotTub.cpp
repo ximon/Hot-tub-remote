@@ -65,7 +65,9 @@ int HotTub::getErrorCode() {
  */
 
 void HotTub::onCommandSent(word command) {
+  Serial.println("Command Sent!");
   if (command == CMD_BTN_TEMP_UP || command == CMD_BTN_TEMP_DN) {
+    Serial.println("Next temperature reading will be for the target temperature");
     temperatureDestination = TEMP_TARGET; //to capture the newly changed target temperature
   } 
 }
@@ -153,14 +155,14 @@ void HotTub::handleReceivedStatus(word command) {
 }
 
 void HotTub::handleReceivedTemperature(word command) {
-  //Serial.print("Decoding temperature command, ");
+  Serial.print("Decoding temperature command, ");
   int temperature = decodeTemperature(command);
     
   switch (temperatureDestination) {
     case TEMP_CURRENT:
       currentState->temperature = temperature;
-      //Serial.print("Temperature is ");
-      //Serial.println(currentState->temperature);
+      Serial.print("Temperature is ");
+      Serial.println(currentState->temperature);
       break;
     case TEMP_TARGET:
       tempIgnoreStart = millis();
@@ -173,9 +175,9 @@ void HotTub::handleReceivedTemperature(word command) {
     case TEMP_IGNORE:
       if (millis() - TEMP_IGNORE_TIME > tempIgnoreStart) {
         temperatureDestination = TEMP_CURRENT;
-        //Serial.println("Next reading will be for the current temperature");
+        Serial.println("Next reading will be for the current temperature");
       } else {
-        //Serial.println("Ignoring temperature reading...");
+        Serial.println("Ignoring temperature reading...");
       }
       break;
   }
@@ -383,12 +385,13 @@ void HotTub::autoRestartCheck() {
 
 void HotTub::targetTemperatureCheck(){
   if (millis() - TEMP_IGNORE_TIME < lastButtonPressTime && lastButtonPressTime > 0)
-    return; //leave temperatures alone untill buttons aren't being pressed
+    return; //leave temperatures alone until buttons aren't being pressed
 
   //if the target temperature is 0 we need to send temperature button press so that the display blinks and shows us the target temperature
   if (currentState->targetTemperature == 0 && millis() > TEMP_IGNORE_TIME) {
     Serial.print("Getting current target temperature...");
     queueCommand(CMD_BTN_TEMP_DN);
+    lastButtonPressTime = millis();
   }
 
   #ifndef DISABLE_TARGET_TEMPERATURE 
@@ -409,38 +412,40 @@ void HotTub::targetTemperatureCheck(){
 }
 
 void HotTub::targetStateCheck(){
-  int pumpState = targetState->pumpState;
+  int requestedState = targetState->pumpState;
   
-  if (currentState->pumpState == pumpState)
+  if (currentState->pumpState == requestedState)
     return;
 
   if (millis() - BUTTON_SEND_DELAY < getLastCommandSentTime())
     return;
 
-  if (pumpState == PUMP_OFF) {
+  if (requestedState == PUMP_OFF) {
     queueCommand(CMD_BTN_PUMP);
     return;
   }
 
-  if (pumpState == PUMP_FILTERING) {
+  if (requestedState == PUMP_FILTERING) {
     if (currentState->pumpState == PUMP_HEATING || currentState->pumpState == PUMP_HEATER_STANDBY)
       queueCommand(CMD_BTN_HEAT); //to turn off the heat
+      
     if (currentState->pumpState == PUMP_OFF)
       queueCommand(CMD_BTN_PUMP); //to turn on the pump
+      
     return;
   }
 
-  if (pumpState == PUMP_HEATING || pumpState == PUMP_HEATER_STANDBY) {
+  if (requestedState == PUMP_HEATING || requestedState == PUMP_HEATER_STANDBY) {
     if (currentState->pumpState == PUMP_BUBBLES) {
       queueCommand(CMD_BTN_BLOW);
       return;
     }
-      
+    
     if (!manuallyTurnedOff && currentState->pumpState != PUMP_HEATING && currentState->pumpState != PUMP_HEATER_STANDBY)
       queueCommand(CMD_BTN_HEAT);
   }
 
-  if (pumpState == PUMP_BUBBLES) {
+  if (requestedState == PUMP_BUBBLES) {
     queueCommand(CMD_BTN_BLOW);
     return;
   }
@@ -454,22 +459,29 @@ void HotTub::setup(void (&onStateChange)(int oldState, int newState)) {
   stateChanged = onStateChange;
 }
 
+long lastPrintTime; 
 void HotTub::loop() {
   SendReceive::loop();
   
   //dont send if we've recently sent, or never sent
   if (millis() - WAIT_BETWEEN_SENDING_AUTO_COMMANDS < getLastCommandQueuedTime() && getLastCommandQueuedTime() > 0) {
-    //Serial.println("Waiting for auto send delay");
+    if (millis() - DELAY_BETWEEN_PRINTS > lastPrintTime) {
+      lastPrintTime = millis();
+      Serial.println("Waiting for auto send delay");
+    }
     return;
   }
 
   //dont send anything unless we have waited the delay between commands or if the queue is full
   if (getCommandQueueCount() == MAX_OUT_COMMANDS) {
-    Serial.println("Command queue maxxed out!");
+    if (millis() - DELAY_BETWEEN_PRINTS > lastPrintTime) {
+      lastPrintTime = millis();
+      Serial.println("Command queue maxed out!");
+    }
     return;
   }
 
-  autoRestartCheck();
+  //autoRestartCheck();
   targetTemperatureCheck();
-  targetStateCheck();
+  //targetStateCheck();
 }

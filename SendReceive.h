@@ -4,7 +4,7 @@
 #include "Arduino.h"
 
 
-#define ALLOW_SEND_WITHOUT_RECEIVE true //enable this to allow sending commands without having first received any
+#define ALLOW_SEND_WITHOUT_RECEIVE false //enable this to allow sending commands without having first received any
 #define IGNORE_INVALID_START_PULSE false //enable this to allow testing without a valid start pulse
 
 #define WAIT_AFTER_RECEIVE_COMMAND 10    //milliseconds to wait after a command has been received before sending a command, the window is ~40ms
@@ -69,7 +69,7 @@ class SendReceive {
 
     bool queueCommand(word command);
     int getCommandQueueCount();
-    void printMessageData();
+    void printMessageData(bool includeBreakdown);
   private:
     int dataInPin;
     int dataInPinBit;
@@ -102,7 +102,6 @@ class SendReceive {
     int commandQueueCount;
 
     volatile word receivedCommand;
-    word sentCommand;
         
     word commandToSend;
     word outBitPos;

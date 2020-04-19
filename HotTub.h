@@ -14,6 +14,7 @@
 #define WAIT_BETWEEN_SENDING_AUTO_COMMANDS 500
 #define WAIT_BEFORE_INITIAL_TARGET_TEMP_CHECK 5000 //milliseconds after startup to wait before checking the initial target temperature
 
+#define DELAY_BETWEEN_PRINTS 1000
 
 #define TEMP_IGNORE_TIME 5000 //time to wait before sending a temperature button press to get the current target temperature
 #define TEMP_ADJUST_DELAY 3000 //must be less than TEMP_IGNORE_TIME!!
@@ -64,7 +65,7 @@ class HotTub : public SendReceive
     int getLimitTemperature();
     
     bool temperatureLockEnabled; //todo - setting in EEPROM
-    bool autoRestartEnabled = true; //todo - setting in EEPROM
+    bool autoRestartEnabled = false; //todo - setting in EEPROM
 
     int getErrorCode();
 
