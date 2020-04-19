@@ -25,6 +25,24 @@ The following URIs are available:
 | /temperature/lock | POST | `{ "state": true }` |
 | /status | GET  | `{ "currentState": { "pumpState": 1, "temperature": 35 }, "targetState": { "pumpState": 3, temperature": 35 }, "autoRestart": true, "temperatureLock": true, "limitTemperature": 40, "errorCode": 0 }` |
 
+## MQTT
+The following Topics are available:
+
+|Topic|Sample Data|
+|--|--|
+| /hottub/cmnd/autoRestart | `{ "state": true }` |
+| /hottub/cmnd/pump | `{ "state": true }` |
+| /hottub/cmnd/blower | `{ "state": true }` |
+| /hottub/cmnd/heater | `{ "state": true }` |
+| /hottub/cmnd/temperature/target |`{ "value": 37 }` |
+| /hottub/cmnd/temperature/limit | `{ "value": 40 }` |
+| /hottub/cmnd/temperature/lock | `{ "state": true }` |
+
+
+On any state change a message containg the complete status is sent to the following topic:
+/hottub/state/status
+
+
 ## Controller interface schematic
 ![Interface circuit](https://raw.githubusercontent.com/ximon/Hot-tub-remote/master/Interface.png "Interface circuit")
 
