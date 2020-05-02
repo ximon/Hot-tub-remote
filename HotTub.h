@@ -1,13 +1,10 @@
 #ifndef HOTTUB_H
 #define HOTTUB_H
 
-#include <Arduino.h>
+#include <ArduinoJson.h>
 #include "Commands.h"
 #include "Temperatures.h"
 #include "SendReceive.h"
-
-#define MAX_TEMP 40 //Maximum temperature supported by the hot tub
-#define MIN_TEMP 20 //Minimum temperature supported by the hot tub
 
 #define INIT_TEMP 37 //Temperature to initially set to when powering up.
 
@@ -16,7 +13,11 @@
 
 #define DELAY_BETWEEN_PRINTS 1000
 
-#define TEMP_IGNORE_TIME 5000 //time to wait before sending a temperature button press to get the current target temperature
+#define TEMP_BUTTON_DELAY 5000 //time to wait after a button is pressed to run the target temperature check
+#define TEMP_TARGET_INITIAL_DELAY 6000 //Time to wait before sending a button command to get the target temperature
+#define TEMP_CURRENT_DELAY 6000 //Time to wait before taking the reading as the current temperature
+#define TEMP_TARGET_DELAY 250 //Time to wait before taking the reading as the target temperature
+
 #define TEMP_ADJUST_DELAY 3000 //must be less than TEMP_IGNORE_TIME!!
 #define BUTTON_SEND_DELAY 3000 //time to wait before sending buttons to change state
 
@@ -48,8 +49,8 @@ struct TargetState {
 
 #define TEMP_CURRENT 0 //received temperatures will be used as the current temperature
 #define TEMP_TARGET 1 //received temperatures will be used as the target temperature
-#define TEMP_IGNORE 2 //received temperatures will be ignored as we cant exactly say what the destination is just yet
-
+#define TEMP_PREP_CURRENT 2 //received temperatures will be ignored, preparing to set Current Temp
+#define TEMP_PREP_TARGET 3 //received temperatures will be ignored, prepaing to set Target Temp
 
 class HotTub : public SendReceive
 {
@@ -59,47 +60,54 @@ class HotTub : public SendReceive
     CurrentState* getCurrentState();
     TargetState* getTargetState();
     void setTargetState(int newState);
-    void setTargetTemperature(int temp); //todo - setting in EEPROM
+    int setTargetTemperature(int temp); //todo - setting in EEPROM
 
-    void setLimitTemperature(int temp); //todo - setting in EEPROM
+    int setLimitTemperature(int temp); //todo - setting in EEPROM
     int getLimitTemperature();
-    
-    bool temperatureLockEnabled; //todo - setting in EEPROM
-    bool autoRestartEnabled = false; //todo - setting in EEPROM
+
+    int targetTemperatureValid(int targetTemp); //todo - make private and do all temperature validation in this class
+    int maxTemperatureValid(int maxTemp); //todo - make private and do all temperature validation in this class
+
+    void setTemperatureLock(bool enable); //todo - setting in EEPROM
+    void setAutoRestart(bool enable); //todo - setting in EEPROM
 
     int getErrorCode();
+    char* getStateJson();
 
-    virtual void onCommandSent(word command);
-    virtual void onCommandReceived(word command);
+    void onCommandSent(unsigned int command);
+    void onCommandReceived(unsigned int command);
   
     void loop();
-    void setup(void (&onStateChange)(int oldState, int newState));
+    void setup(void (&onStateChange)());
   private:
-    void (*stateChanged)(int oldState, int newState);
+    void (*stateChanged)();
   
     CurrentState* currentState;
     TargetState* targetState;
 
     unsigned long tempIgnoreStart = 0; //start time to ignore temperature commands from
 
-    int temperatureDestination = TEMP_CURRENT;
+    int temperatureDestination = TEMP_PREP_CURRENT;
     bool manuallyTurnedOff; //indicates to the autoRestart code that the pump was turned off via the button / command, rather than the 24h timeout
-    word lastButton; //to be used instead of manuallyTurnedOff to check if the pump was turned off with the control panel
+    unsigned int lastButton; //to be used instead of manuallyTurnedOff to check if the pump was turned off with the control panel
     int limitTemperature = MAX_TEMP;//limits the temperature that can be set to via the control panel
     bool limitTemperatureIsCelsius;
+
+    bool temperatureLockEnabled = false; //todo - setting in EEPROM
+    bool autoRestartEnabled = false; //todo - setting in EEPROM
   
     void autoRestartCheck();
     void targetTemperatureCheck();
     void targetStateCheck();
            
-    void decodeStatus(word command);
-    void decodeError(word command);
-    int decodeTemperature(word command);
+    void decodeStatus(unsigned int command);
+    void decodeError(unsigned int command);
+    int decodeTemperature(unsigned int command);
 
-    void handleReceivedError(word command);
-    void handleReceivedStatus(word command);
-    void handleReceivedTemperature(word command);
-    void handleReceivedButton(word command);
+    void handleReceivedError(unsigned int command);
+    void handleReceivedStatus(unsigned int command);
+    void handleReceivedTemperature(unsigned int command);
+    void handleReceivedButton(unsigned int command);
     
     String stateToString(int pumpState);
     String errorToString(int errorCode);

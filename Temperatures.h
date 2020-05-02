@@ -1,6 +1,9 @@
 #ifndef TEMPERATURES_H
 #define TEMPERATURES_H
 
+#define MAX_TEMP 40 //Maximum temperature supported by the hot tub
+#define MIN_TEMP 20 //Minimum temperature supported by the hot tub
+
 #define TEMP_40C 0xB5F
 #define TEMP_39C 0xB63
 #define TEMP_38C 0xB66

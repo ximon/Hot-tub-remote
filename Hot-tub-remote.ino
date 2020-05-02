@@ -2,16 +2,15 @@
 
 //todo - option to pull line high for a short period to reset disiplay controller on error?
 
-//getting target temp at startup works
-//temperature lock works
-//adjusting target temp via buttons works
-//adjusting target temp externally works
+//test temperature lock
 //need to check target state changing and autorestart
+
 
 #define HOSTNAME "HotTubRemote"
 
 #include <ArduinoJson.h>
 #include <IotWebConf.h>
+#include <DNSServer.h>
 #include <WiFiClient.h>
 #include <ESP8266WiFi.h>
 #include <esp8266_peri.h>
@@ -22,6 +21,7 @@
 #include <FS.H>
 #include "HotTub.h"
 #include "HotTubApi.h"
+#include "HotTubMqtt.h"
 #include "Pins.h"
 
 
@@ -30,30 +30,40 @@ const char thingName[] = "HotTubRemote";
 // -- Initial password to connect to the Thing, when it creates an own Access Point.
 const char wifiInitialApPassword[] = "HotTubRemote";
 
-#define CONFIG_VERSION "beta2"
+#define CONFIG_VERSION "beta3"
 
 DNSServer dnsServer;
 ESP8266WebServer server(80);
 WebSocketsServer webSocket(81);
 HTTPUpdateServer httpUpdater;
-IotWebConf iotWebConf(thingName, &dnsServer, &server, wifiInitialApPassword, CONFIG_VERSION);
 
-File fsUploadFile;
+#define STRING_LEN 128
+#define NUMBER_LEN 32
+
+char mqttServer[STRING_LEN] = "";
+char mqttPort[NUMBER_LEN] = "";
+char mqttUser[STRING_LEN] = "";
+char mqttPass[STRING_LEN] = "";
+
+IotWebConf iotWebConf(thingName, &dnsServer, &server, wifiInitialApPassword, CONFIG_VERSION);
+IotWebConfSeparator separator = IotWebConfSeparator("MQTT Settings");
+IotWebConfParameter mqttServerParam = IotWebConfParameter("Server", "mqttServer", mqttServer, STRING_LEN);
+IotWebConfParameter mqttPortParam = IotWebConfParameter("Port", "mqttPort", mqttPort, NUMBER_LEN, "number", "1883", NULL, "min='1' max='65535' step='1'");
+IotWebConfParameter mqttUserParam = IotWebConfParameter("User", "mqttUser", mqttUser, STRING_LEN);
+IotWebConfParameter mqttPassParam = IotWebConfParameter("Password", "mqttPass", mqttPass, STRING_LEN);
+
 
 HotTub hotTub(DATA_IN, DATA_ENABLE, DBG);
 HotTubApi hotTubApi(&server, &hotTub);
+HotTubMqtt hotTubMqtt(&hotTub);
 
+bool OTASetup = false;
 bool sendTestCommand = false;
 
-void onStateChange(int oldState, int newState) {
-  char data[100];
-  sprintf(data, "State changed from %d to %d", oldState, newState);
-  webSocket.broadcastTXT(data);
-}
+void onStateChange() {  
+  hotTubMqtt.sendStatus();
 
-//outputs the html
-void okHtml(String html) {
-  server.send(200, "text/html", html);
+  webSocket.broadcastTXT(hotTub.getStateJson());
 }
 
 void handle_root() {
@@ -62,13 +72,13 @@ void handle_root() {
     return;
   }
   
-  String s = "<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1, user-scalable=no\"/>";
-  s += "<title>Hot Tub Remote</title></head><body>Hot Tub Remote<br /><br />";
-  s += "Go to <a href='config'>configure page</a> to change settings.<br />";
-  s += "Go to <a href='status'>status</a> to view status.<br />";
-  s += "</body></html>\n";
+  String html = "<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1, user-scalable=no\"/>";
+  html += "<title>Hot Tub Remote</title></head><body>Hot Tub Remote<br /><br />";
+  html += "Go to <a href='config'>configure page</a> to change settings.<br />";
+  html += "Go to <a href='status'>status</a> to view status.<br />";
+  html += "</body></html>\n";
 
-  okHtml(s);
+  server.send(200, "text/html", html);
 }
 
 void ICACHE_RAM_ATTR handleDataInterrupt() {
@@ -93,88 +103,34 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
       Serial.printf("[%u] get Text: %s\n", num, payload);
 
       webSocket.sendTXT(num, "Received!");
-      //webSocket.broadcastTXT("message here");
 
       break;
   }  
 }
 
-String getContentType(String filename) { // determine the filetype of a given filename, based on the extension
-  if (filename.endsWith(".html")) return "text/html";
-  else if (filename.endsWith(".css")) return "text/css";
-  else if (filename.endsWith(".js")) return "application/javascript";
-  else if (filename.endsWith(".ico")) return "image/x-icon";
-  else if (filename.endsWith(".gz")) return "application/x-gzip";
-  return "text/plain";
-}
-
-bool handleFileRead(String path) { // send the right file to the client (if it exists)
-  Serial.println("handleFileRead: " + path);
-  if (path.endsWith("/")) path += "index.html";          // If a folder is requested, send the index file
-  String contentType = getContentType(path);             // Get the MIME type
-  String pathWithGz = path + ".gz";
-  if (SPIFFS.exists(pathWithGz) || SPIFFS.exists(path)) { // If the file exists, either as a compressed archive, or normal
-    if (SPIFFS.exists(pathWithGz))                         // If there's a compressed version available
-      path += ".gz";                                         // Use the compressed verion
-    File file = SPIFFS.open(path, "r");                    // Open the file
-    size_t sent = server.streamFile(file, contentType);    // Send it to the client
-    file.close();                                          // Close the file again
-    Serial.println(String("\tSent file: ") + path);
-    return true;
-  }
-  Serial.println(String("\tFile Not Found: ") + path);   // If the file doesn't exist, return false
-  return false;
-}
-
-String formatBytes(size_t bytes) { // convert sizes in bytes to KB and MB
-  if (bytes < 1024) {
-    return String(bytes) + "B";
-  } else if (bytes < (1024 * 1024)) {
-    return String(bytes / 1024.0) + "KB";
-  } else if (bytes < (1024 * 1024 * 1024)) {
-    return String(bytes / 1024.0 / 1024.0) + "MB";
-  }
-}
-
-void handleFileUpload(){ // upload a new file to the SPIFFS
-  HTTPUpload& upload = server.upload();
-  String path;
-  if(upload.status == UPLOAD_FILE_START){
-    path = upload.filename;
-    if(!path.startsWith("/")) path = "/"+path;
-    if(!path.endsWith(".gz")) {                          // The file server always prefers a compressed version of a file 
-      String pathWithGz = path+".gz";                    // So if an uploaded file is not compressed, the existing compressed
-      if(SPIFFS.exists(pathWithGz))                      // version of that file must be deleted (if it exists)
-         SPIFFS.remove(pathWithGz);
-    }
-    Serial.print("handleFileUpload Name: "); Serial.println(path);
-    fsUploadFile = SPIFFS.open(path, "w");            // Open the file for writing in SPIFFS (create if it doesn't exist)
-    path = String();
-  } else if(upload.status == UPLOAD_FILE_WRITE){
-    if(fsUploadFile)
-      fsUploadFile.write(upload.buf, upload.currentSize); // Write the received bytes to the file
-  } else if(upload.status == UPLOAD_FILE_END){
-    if(fsUploadFile) {                                    // If the file was successfully created
-      fsUploadFile.close();                               // Close the file again
-      Serial.print("handleFileUpload Size: "); Serial.println(upload.totalSize);
-      server.sendHeader("Location","/success.html");      // Redirect the client to the success page
-      server.send(303);
-    } else {
-      server.send(500, "text/plain", "500: couldn't create file");
-    }
-  }
-}
-
 void setupBoard() {
-  pinMode(BUTTON, INPUT);
-  pinMode(DATA_IN, INPUT);
+  pinMode(BUTTON, INPUT_PULLUP);
   pinMode(DBG, OUTPUT);
   pinMode(LED, OUTPUT);
+  pinMode(DATA_IN, INPUT);
+  pinMode(DATA_OUT, OUTPUT); // Override default Serial initiation
   pinMode(DATA_ENABLE, OUTPUT);
- 
+  digitalWrite(DATA_OUT, 0);
+  digitalWrite(DATA_ENABLE, LOW);
+}
+
+void setupIotWebConf() {
   iotWebConf.setStatusPin(LED);
   //iotWebConf.skipApStartup();
   iotWebConf.setupUpdateServer(&httpUpdater);
+  iotWebConf.setWifiConnectionCallback(wifiConnected);
+ 
+  iotWebConf.addParameter(&separator);
+  iotWebConf.addParameter(&mqttServerParam);
+  iotWebConf.addParameter(&mqttPortParam);
+  iotWebConf.addParameter(&mqttUserParam);
+  iotWebConf.addParameter(&mqttPassParam);
+  
   iotWebConf.init();
 }
 
@@ -183,8 +139,18 @@ void setupOTA() {
   //String hostname();
   WiFi.hostname(HOSTNAME);
   
-  ArduinoOTA.setHostname("HotTubRemote");
-  ArduinoOTA.onStart([]() { Serial.println("Start"); });
+  ArduinoOTA.setHostname(HOSTNAME);
+  ArduinoOTA.onStart([]() {
+    String type;
+    if (ArduinoOTA.getCommand() == U_FLASH) {
+      type = "sketch";
+    } else { // U_FS
+      type = "filesystem";
+    }
+
+    // NOTE: if updating FS this would be the place to unmount FS using FS.end()
+    Serial.println("Start updating " + type);
+  });
   ArduinoOTA.onEnd([]() { Serial.println("\nEnd"); });
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
     Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
@@ -198,21 +164,18 @@ void setupOTA() {
     else if (error == OTA_END_ERROR) Serial.println("End Failed");
   });
   ArduinoOTA.begin();
+
+  Serial.println("OTA Setup complete.");
 }
 
 void handleNotFound() {  
-  if (!handleFileRead(server.uri())) {
-    iotWebConf.handleNotFound();
-  }
+  iotWebConf.handleNotFound();
 }
 
 void setupWebServer() {
   // -- Set up required URL handlers on the web server.
   server.on("/", handle_root);
   server.on("/config", []{ iotWebConf.handleConfig(); });
-  server.on("/edit.html", HTTP_POST, []() {
-    server.send(200, "text/plain", "");
-    }, handleFileUpload);
   server.onNotFound(handleNotFound);
   server.begin();
   Serial.println("HTTP server started.");
@@ -221,6 +184,17 @@ void setupWebServer() {
 void setupWebSocket() {
   webSocket.begin();
   webSocket.onEvent(webSocketEvent);
+}
+
+void mqttCallback(char* topic, byte* payload, unsigned int length) {
+  hotTubMqtt.callback(topic, payload, length);
+}
+
+void setupMqtt(){
+  hotTubMqtt.setServer(mqttServer, atoi(mqttPort));
+
+  if (strlen(mqttUser) > 0)
+    hotTubMqtt.setCredentials(&mqttUser[0], &mqttPass[0]);
 }
 
 void setupSPIFFS() {
@@ -232,41 +206,42 @@ void enableInterrupts() {
   attachInterrupt(digitalPinToInterrupt(DATA_IN), handleDataInterrupt, CHANGE);
 }
 
+void wifiConnected() {
+  setupOTA();
+
+  if (strlen(mqttServer) > 0)
+    setupMqtt();
+}
+
 void setup(void)
 {
   Serial.begin(115200);
   Serial.println();
   Serial.println();
-  Serial.println("Starting...");
+  Serial.println("Starting HotTub Remote...");
   
   setupBoard();
-
+  setupIotWebConf();
   setupWebServer();
   setupWebSocket();
-
   setupSPIFFS();
-  setupOTA();
-
-  pinMode(D5, INPUT_PULLUP);
-  pinMode(3, OUTPUT); // Override default Serial initiation
-  digitalWrite(3,0); // GPIO3 = I2S data out
-  pinMode(D2, OUTPUT);
-  digitalWrite(D2, LOW);
   hotTub.setup(onStateChange);
   hotTubApi.setup();
+  hotTubMqtt.setup(*mqttCallback);
   
   enableInterrupts();
 }
 
 void loop(void)
-{  
+{
+  ArduinoOTA.handle();
   iotWebConf.doLoop(); // doLoop should be called as frequently as possible.
   webSocket.loop();
   server.handleClient();
-  ArduinoOTA.handle();
-  
-  testCommandCheck();
-  
+
+  //testCommandCheck();
+
+  hotTubMqtt.loop();
   hotTub.loop();
 } 
 
@@ -275,7 +250,5 @@ void testCommandCheck() {
     sendTestCommand = false;
     
     Serial.println("Button Pressed!");
-    //hotTub.autoRestartEnabled = !hotTub.autoRestartEnabled;
-    //onStateChange(0,1);
   }
 }

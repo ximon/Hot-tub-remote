@@ -1,10 +1,9 @@
 #ifndef SENDRECEIVE_H
 #define SENDRECEIVE_H
 
-#include "Arduino.h"
+#include <Arduino.h>
 
-
-#define ALLOW_SEND_WITHOUT_RECEIVE false //enable this to allow sending commands without having first received any
+#define ALLOW_SEND_WITHOUT_RECEIVE true //enable this to allow sending commands without having first received any
 #define IGNORE_INVALID_START_PULSE false //enable this to allow testing without a valid start pulse
 
 #define WAIT_AFTER_RECEIVE_COMMAND 10    //milliseconds to wait after a command has been received before sending a command, the window is ~40ms
@@ -58,8 +57,8 @@ class SendReceive {
     SendReceive(int dataInPin, int dataOutPin, int debugPin);
     void loop();
 
-    virtual void onCommandReceived(word command) = 0;
-    virtual void onCommandSent(word command) = 0;
+    virtual void onCommandReceived(unsigned int command) = 0;
+    virtual void onCommandSent(unsigned int command) = 0;
 
     void ICACHE_RAM_ATTR dataInterrupt();
 
@@ -67,7 +66,7 @@ class SendReceive {
     unsigned long getLastCommandQueuedTime();
     unsigned long getLastCommandReceivedTime();
 
-    bool queueCommand(word command);
+    bool queueCommand(unsigned int command);
     int getCommandQueueCount();
     void printMessageData(bool includeBreakdown);
   private:
@@ -82,7 +81,7 @@ class SendReceive {
 
     int bitIndex;
     //int bitCount;
-    word times[16];
+    unsigned int times[16];
     bool states[16];
 
     int dataIndex = 0;
@@ -94,17 +93,17 @@ class SendReceive {
     unsigned long startPulseLength;
     unsigned long startPulseStartTime;
     bool invalidStartPulse;
-    volatile word inBitPos;
-    volatile word inData;
+    volatile unsigned int inBitPos;
+    volatile unsigned int inData;
     volatile int RECV_MODE;
     
-    word commandQueue[MAX_OUT_COMMANDS];
+    unsigned int commandQueue[MAX_OUT_COMMANDS];
     int commandQueueCount;
 
-    volatile word receivedCommand;
+    volatile unsigned int receivedCommand;
         
-    word commandToSend;
-    word outBitPos;
+    unsigned int commandToSend;
+    unsigned int outBitPos;
     int SEND_MODE;
     
     unsigned long lastCommandSentTime;
@@ -113,17 +112,18 @@ class SendReceive {
 
     void processOutgoingCommandQueue();
     void processIncomingCommand();
-    void sendCommand(word command);
+    void sendCommand(unsigned int command);
 
-unsigned long now;
-unsigned long bitTime;
-bool nonStartBit;
-bool validStartBit;
-bool bitState;
-bool lastBitState;
-    
+    unsigned long now;
+    unsigned long bitTime;
+    bool nonStartBit;
+    bool validStartBit;
+    bool bitState;
+    bool lastBitState;
+
+    void printCommandQueue();
     int getReceiveBitTime(int bitIndex);
-    word decode(word times[], bool states[]);
+    unsigned int decode(unsigned int times[], bool states[]);
 };
 
 #endif

@@ -1,8 +1,6 @@
 #ifndef HOTTUBAPI_H
 #define HOTTUBAPI_H
 
-#include <Arduino.h>
-
 #include <ArduinoJson.h>
 #include "RouteHandler.h"
 #include "HotTub.h"
@@ -40,6 +38,7 @@ class HotTubApi {
     void addCorsHeaders();
     void okMessage();
     void okMessage(String message);
+    void okJson(char* json);
     void okJson(String json);
     void okText(String message);
     void errorMessage(String message);
