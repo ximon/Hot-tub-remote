@@ -121,7 +121,7 @@ void setupBoard() {
 
 void setupIotWebConf() {
   iotWebConf.setStatusPin(LED);
-  //iotWebConf.skipApStartup();
+  iotWebConf.skipApStartup();
   iotWebConf.setupUpdateServer(&httpUpdater);
   iotWebConf.setWifiConnectionCallback(wifiConnected);
  
