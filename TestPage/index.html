@@ -1,59 +1,7 @@
 <html>
 	<head>
 		<title>Hot tub remote test page</title>
-		<script>
-			const DEFAULT_IP = '192.168.0.44';
-			const ip = getIp();
-						
-			function getIp() {
-				const urlParams = new URLSearchParams(location.search);
-				const ip = urlParams.has('ip') ? urlParams.get('ip') : DEFAULT_IP;
-				const regex = /^(?:(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])(\.(?!$)|$)){4}$/gm;
-				
-				return ip.match(regex) ? ip : DEFAULT_IP;
-			}
-			
-	
-			async function sendCommand(command) {
-				await post(`command?command=${command}`);
-			}
-		
-			async function post(uri) {
-				return await http(uri, 'POST');
-			}
-		
-			async function http(uri, method) {
-				setText("");
-				try {
-					var response = await fetch(`http://${ip}/${uri}`, {	
-						method: method, 
-						mode: 'cors',
-						cache: 'no-cache',
-						headers: {
-							'Content-Type': 'text/plain',
-						}
-					});
-			
-					var data = JSON.stringify(await response.json(), null, 2);
-					setText((response.ok ? "SUCCESS: " : "ERROR: ") + data);
-					
-				} catch(err) {
-					setText(err);
-				}		
-			}				
-			
-			function setText(text) {
-				document.getElementById("response").innerHTML = text;
-			}
-				
-			async function device(deviceType, state) {
-				await post(`${deviceType}?state=${state}`);
-			}
-
-			async function getStatus() {
-				await http('status', 'GET');
-			}
-		</script>
+		<script type="module" src="./App.js"></script>
 	</head>
 	<body>
 		<div>
@@ -62,64 +10,58 @@
 
 		<div>
 			Heater
-			<button onclick='device("heater", true)')>On</button>
-			<button onclick='device("heater", false)')>Off</button>
+			<button class='heater' state='true'>On</button>
+			<button class='heater' state='false'>Off</button>
 		<div>
 
 		<div>
 			Pump
-			<button onclick='device("pump", true)'>On</button>
-			<button onclick='device("pump", false)'>Off</button>
+			<button class='pump' state='true'>On</button>
+			<button class='pump' state='false'>Off</button>
 		</div>
 
 		<div>
 			Blower
-			<button onclick='device("blower", true)'>On</button>
-			<button onclick='device("blower", false)'>Off</button><br />
+			<button class='blower' data-state='true'>On</button>
+			<button class='blower' data-state='false'>Off</button><br />
 		</div>
 
 		<div>
 			Temp
-			<button onclick='sendCommand("0x1A30");'>Up</button>
-			<button onclick='sendCommand("0x1840");'>Down</button>
+			<button id='tempUp'>Up</button>
+			<button id='tempDown'>Down</button>
 		</div>
 		
 		<div>
 			Temp
-			<button onclick='post("temperature/target?value=40")'>40</button>
-			<button onclick='post("temperature/target?value=37")'>37</button>
+			<button class='targetTemp' data-temp='40'>40</button>
+			<button class='targetTemp' data-temp='37'>37</button>
 		</div>
 <hr/>
 		<div>
 			Max Temp
-			<button onclick='post("temperature/max?value=40")'>40</button>
-			<button onclick='post("temperature/max?value=37")'>37</button>
+			<button class='maxTemp' data-temp='40'>40</button>
+			<button class='maxTemp' data-temp='37'>37</button>
 		</div>
 
 		<div>
 			Auto-Restart
-			<button onclick='post("autoRestart?state=true")'>on</button>
-			<button onclick='post("autoRestart?state=false")'>off</button>
+			<button class='autoRestart' data-state='true'>on</button>
+			<button class='autoRestart' data-state='false'>off</button>
 		</div>
 		
 		<div>
 			Temperature-Lock
-			<button onclick='post("temperature/lock?state=true")'>on</button>
-			<button onclick='post("temperature/lock?state=false")'>off</button>
+			<button class='tempLock' data-state='true'>on</button>
+			<button class='tempLock' data-state='false'>off</button>
 		</div>
 
 		<div>
-			<button onclick='getStatus()'>Get Status</button>
+			<button id='getStatus'>Get Status</button>
 		</div>
 
 		<div>
 			<pre id="response" style="border: solid black 1px;"></pre>
 		</div>
-
-		<script type="text/javascript">
-			(function() {
-				document.getElementById('ipAddress').innerHTML = ip;
-			})();
-		</script>
 	</body>
 </html>

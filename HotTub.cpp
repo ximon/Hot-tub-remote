@@ -2,10 +2,11 @@
 #include "Commands.h"
 #include "Temperatures.h"
 #include "SendReceive.h"
-#include <Arduino.h>
 
 //todo - extract Serial.print lines to a debug function that can be handled externally.
-//#define DISABLE_TARGET_TEMPERATURE
+#define DISABLE_TARGET_TEMPERATURE
+
+#define DEBUG_TUB
 
 HotTub::HotTub(int dataInPin, int dataOutPin, int debugPin)
 : SendReceive(dataInPin, dataOutPin, debugPin) {
@@ -23,7 +24,7 @@ HotTub::HotTub(int dataInPin, int dataOutPin, int debugPin)
 
 //todo - change this to return a copy of the array as we don't want external code changing its state!
 CurrentState* HotTub::getCurrentState() {
-  return currentState;;
+  return currentState;
 }
 
 TargetState* HotTub::getTargetState() {
@@ -32,52 +33,155 @@ TargetState* HotTub::getTargetState() {
 
 void HotTub::setTargetState(int newState) {
   if(targetState->pumpState != newState) {
+#ifdef DEBUG_TUB
+    Serial.print("HOTTUB->Changing state from ");
+    Serial.print(stateToString(targetState->pumpState));
+    Serial.print(" to ");
+    Serial.println(stateToString(newState));
+#endif
+    
     targetState->pumpState = newState;
-    stateChanged(targetState->pumpState, newState);
+    stateChanged();
   }
 }
 
-void HotTub::setTargetTemperature(int temp) {
-  targetState->targetTemperature = temp;
+int HotTub::maxTemperatureValid(int maxTemp) {
+  bool aboveMax = maxTemp > MAX_TEMP;
+  bool belowMin = maxTemp < MIN_TEMP;
+
+  if (aboveMax)
+    return 1;
+
+  if (belowMin)
+    return -1;
+
+  return 0;
 }
 
-void HotTub::setLimitTemperature(int temp) {
+int HotTub::targetTemperatureValid(int targetTemp) {
+  bool aboveMax = targetTemp > limitTemperature;
+  bool belowMin = targetTemp < MIN_TEMP;
+
+  if (aboveMax)
+    return 1;
+    
+  if (belowMin)
+    return -1;
+    
+  return 0;
+}
+
+int HotTub::setTargetTemperature(int temp) {
+  int status = targetTemperatureValid(temp);
+
+  if (status != 0)
+    return 0;
+
+#ifdef DEBUG_TUB
+  Serial.print("HOTTUB->Setting target temperature to ");
+  Serial.println(temp);
+#endif
+
+  targetState->targetTemperature = temp;
+  stateChanged();
+  
+  return status;
+}
+
+int HotTub::setLimitTemperature(int temp) {
+  int status = maxTemperatureValid(temp);
+
+  if (status != 0)
+    return 0; 
+
+#ifdef DEBUG_TUB
+  Serial.print("HOTTUB->Setting limit temperature to ");
+  Serial.println(temp);
+#endif
+
   limitTemperature = temp;
   
   if (targetState->targetTemperature > temp) {
     targetState->targetTemperature = temp;
   }
+
+  stateChanged();
+
+  return status;
 }
 
 int HotTub::getLimitTemperature() {
   return limitTemperature;
 }
 
+void HotTub::setTemperatureLock(bool enable) {
+  temperatureLockEnabled = enable;
+  stateChanged();
+}
+
+void HotTub::setAutoRestart(bool enable) {
+  autoRestartEnabled = enable;
+  stateChanged();
+}
+
+
 int HotTub::getErrorCode() {
   return currentState->errorCode;
 }
 
+char* HotTub::getStateJson() {
+  const size_t capacity = 2*JSON_OBJECT_SIZE(7) + JSON_OBJECT_SIZE(6);
+  DynamicJsonDocument doc(capacity);
+  char* json = new char[300];
 
+  CurrentState* currentState = getCurrentState();
+  JsonObject currentJson = doc.createNestedObject("currentState");
+  currentJson["pumpState"] = currentState->pumpState;
+  currentJson["temperature"] = currentState->temperature;
+  currentJson["targetTemperature"] = currentState->targetTemperature;
+
+  TargetState* targetState = getTargetState();
+  JsonObject targetJson = doc.createNestedObject("targetState");
+  targetJson["pumpState"] = targetState->pumpState;
+  targetJson["targetTemperature"] = targetState->targetTemperature;
+  
+  doc["autoRestart"] = autoRestartEnabled;
+  doc["limitTemperature"] = getLimitTemperature();
+  doc["temperatureLock"] = temperatureLockEnabled;
+  doc["errorCode"] = currentState->errorCode;
+
+  serializeJson(doc, json, 300);
+  return json;
+}
 
 
 /*
  *  Commands
  */
 
-void HotTub::onCommandSent(word command) {
-  Serial.println("Command Sent!");
+void HotTub::onCommandSent(unsigned int command) {
+#ifdef DEBUG_TUB
+  Serial.println("HOTTUB->Command Sent!");
+#endif
+
   if (command == CMD_BTN_TEMP_UP || command == CMD_BTN_TEMP_DN) {
-    Serial.println("Next temperature reading will be for the target temperature");
+#ifdef DEBUG_TUB
+    Serial.println("HOTTUB->Next temperature reading will be for the target temperature");
+#endif
     temperatureDestination = TEMP_TARGET; //to capture the newly changed target temperature
   } 
 }
 
-void HotTub::onCommandReceived(word command) {
-  //Serial.print("Handling command 0x");
-  //Serial.println(command, HEX);
+void HotTub::onCommandReceived(unsigned int command) {
+#ifdef DEBUG_TUB_VERBOSE
+  Serial.print("HOTTUB->Handling command 0x");
+  Serial.println(command, HEX);
+#endif
   
   if (command == 0) {
-    Serial.print("Invalid command received");
+#ifdef DEBUG_TUB
+    Serial.print("HOTTUB->Invalid command received");
+#endif
     return;
   }
 
@@ -103,7 +207,7 @@ void HotTub::onCommandReceived(word command) {
 }
 
 String HotTub::stateToString(int pumpState) {
-  switch (currentState->pumpState){
+  switch (pumpState){
     case PUMP_OFF:            return "Off";
     case PUMP_FILTERING:      return "Filtering";
     case PUMP_HEATING:        return "Heating";
@@ -135,69 +239,118 @@ String HotTub::buttonToString(int buttonCommand) {
   }
 }
 
-void HotTub::handleReceivedError(word command) {
+void HotTub::handleReceivedError(unsigned int command) {
   decodeError(command);
    
   if (currentState->errorCode > 0) {
-    Serial.print("Error code ");
+
+#ifdef DEBUG_TUB
+    Serial.print("HOTTUB->Error code ");
     Serial.print(currentState->errorCode);
     Serial.print(" received - ");
     Serial.println(errorToString(currentState->errorCode));
+#endif
+
+    stateChanged();
   }
 }
 
-void HotTub::handleReceivedStatus(word command) {
-  //Serial.print("Decoding status command, ");
+void HotTub::handleReceivedStatus(unsigned int command) {
+#ifdef DEBUG_TUB_VERBOSE
+  Serial.print("HOTTUB->Decoding status command, ");
+#endif
+
   decodeStatus(command);
 
-  //Serial.print("state is : ");
-  //Serial.println(stateToString(currentState->pumpState));
+#ifdef DEBUG_TUB_VERBOSE
+  Serial.print("state is : ");
+  Serial.println(stateToString(currentState->pumpState));
+#endif
 }
 
-void HotTub::handleReceivedTemperature(word command) {
-  Serial.print("Decoding temperature command, ");
+void HotTub::handleReceivedTemperature(unsigned int command) {
   int temperature = decodeTemperature(command);
     
+#ifdef DEBUG_TUB_VERBOSE
+  Serial.print("HOTTUB->Decoding temperature command, ");
+  Serial.print("received ");
+  Serial.println(temperature);
+#endif
+    
   switch (temperatureDestination) {
+    case TEMP_PREP_CURRENT:
+      if (millis() - TEMP_CURRENT_DELAY > tempIgnoreStart) {
+#ifdef DEBUG_TUB_VERBOSE
+        Serial.println("HOTTUB->Next reading will be for the current temperature");
+#endif
+        temperatureDestination = TEMP_CURRENT;
+      }
+#ifdef DEBUG_TUB
+      else {
+        Serial.println("HOTTUB->Ignoring Current Temperature reading...");
+      }
+#endif
+      break;
     case TEMP_CURRENT:
-      currentState->temperature = temperature;
-      Serial.print("Temperature is ");
+      if (currentState->temperature != temperature) {
+        currentState->temperature = temperature;
+        stateChanged();
+      }
+#ifdef DEBUG_TUB_VERBOSE
+      Serial.print("HOTTUB->Temperature is ");
       Serial.println(currentState->temperature);
+#endif
+      break;
+    case TEMP_PREP_TARGET:
+      if (millis() - TEMP_TARGET_DELAY > tempIgnoreStart) {
+#ifdef DEBUG_TUB
+        Serial.println("HOTTUB->Next reading will be for the Target Temperature");
+#endif
+        temperatureDestination = TEMP_TARGET;
+      }
+#ifdef DEBUG_TUB
+      else {
+        Serial.println("HOTTUB->Ignoring Target Temperature reading...");
+      }
+#endif
       break;
     case TEMP_TARGET:
-      tempIgnoreStart = millis();
-      temperatureDestination = TEMP_IGNORE;
-      
-      currentState->targetTemperature = temperature;
-      Serial.print("Target temperature is ");
-      Serial.println(currentState->targetTemperature);
-      break;
-    case TEMP_IGNORE:
-      if (millis() - TEMP_IGNORE_TIME > tempIgnoreStart) {
-        temperatureDestination = TEMP_CURRENT;
-        Serial.println("Next reading will be for the current temperature");
-      } else {
-        Serial.println("Ignoring temperature reading...");
+      if (currentState->targetTemperature != temperature) {
+        currentState->targetTemperature = temperature;
+        stateChanged();
       }
+#ifdef DEBUG_TUB_VERBOSE
+      Serial.print("HOTTUB->Target temperature is ");
+      Serial.println(currentState->targetTemperature);
+#endif
+      
+      tempIgnoreStart = millis();
+      temperatureDestination = TEMP_PREP_CURRENT;
       break;
   }
 }
 
-void HotTub::handleReceivedButton(word command) {
-  //Serial.print("Decoding button command,");
-
-  //Serial.print(buttonToString(command));
-  //Serial.println(" button was pressed");
+void HotTub::handleReceivedButton(unsigned int command) {
+#ifdef DEBUG_TUB
+  Serial.print("HOTTUB->Decoding button command,");
+  Serial.print(buttonToString(command));
+  Serial.println(" button was pressed");
+#endif
 
   lastButton = command;
 
   switch (command) {
     case CMD_BTN_TEMP_UP:
     case CMD_BTN_TEMP_DN:
+      temperatureDestination = TEMP_PREP_TARGET;
+      tempIgnoreStart = millis();
+      
       if (!temperatureLockEnabled) {
-        if (temperatureDestination == TEMP_TARGET || temperatureDestination == TEMP_IGNORE) {
-          //Serial.print("Changing target temp from ");
-          //Serial.print(targetState->targetTemperature);
+        if (temperatureDestination == TEMP_TARGET) {
+#ifdef DEBUG_TUB
+          Serial.print("HOTTUB->Changing target temp from ");
+          Serial.print(targetState->targetTemperature);
+#endif
 
           int newTargetTemp = command == CMD_BTN_TEMP_UP
             ? targetState->targetTemperature + 1 
@@ -213,15 +366,17 @@ void HotTub::handleReceivedButton(word command) {
             newTargetTemp = MIN_TEMP;
 
           setTargetTemperature(newTargetTemp);
-          
-          //Serial.print(" to ");
-          //Serial.println(targetState->targetTemperature);
+#ifdef DEBUG_TUB          
+          Serial.print(" to ");
+          Serial.println(targetState->targetTemperature);
+#endif
         }
-      } else {
-        //Serial.println("Temperature is locked, keeping current target temperature");
       }
-
-      temperatureDestination = TEMP_TARGET;
+#ifdef DEBUG_TUB
+      else {
+        Serial.println("HOTTUB->Temperature is locked, keeping current target temperature");
+      }
+#endif
       
       break;
     case CMD_BTN_PUMP:
@@ -234,7 +389,7 @@ void HotTub::handleReceivedButton(word command) {
   lastButtonPressTime = millis();
 }
 
-void HotTub::decodeStatus(word command) {
+void HotTub::decodeStatus(unsigned int command) {
   int newState = currentState->pumpState;
 
   switch(command) {
@@ -257,20 +412,26 @@ void HotTub::decodeStatus(word command) {
       newState = PUMP_HEATING;
       break;
     case CMD_FLASH:
+      if (temperatureDestination == TEMP_CURRENT) {
+        temperatureDestination = TEMP_PREP_TARGET;
+        tempIgnoreStart = millis();
+      }
       break;
   }
 
-  if (targetState->pumpState == PUMP_UNKNOWN)
+  if (targetState->pumpState == PUMP_UNKNOWN) {
     targetState->pumpState = newState;
+    stateChanged();
+  }
 
   if (currentState->pumpState != newState) {
-    stateChanged(currentState->pumpState, newState);
     currentState->pumpState = newState;
     currentState->errorCode = 0;
+    stateChanged();
   }
 }
 
-void HotTub::decodeError(word command) {
+void HotTub::decodeError(unsigned int command) {
   int errorCode = 0;
   
   switch (command) {
@@ -296,14 +457,14 @@ void HotTub::decodeError(word command) {
 
   if (errorCode > 0){
     if (currentState->pumpState != PUMP_ERROR) {
-      stateChanged(currentState->pumpState, PUMP_ERROR);
       currentState->pumpState = PUMP_ERROR;
       currentState->errorCode = errorCode;
+      stateChanged();
     }
   }
 }
 
-int HotTub::decodeTemperature(word command) {
+int HotTub::decodeTemperature(unsigned int command) {
   switch (command) {
     case TEMP_40C: return 40;  
     case TEMP_39C: return 39;
@@ -370,26 +531,28 @@ int HotTub::decodeTemperature(word command) {
   }
 }
 
-
-
 /*
  * Target state checks
  */
 
 void HotTub::autoRestartCheck() {
     if (!manuallyTurnedOff && autoRestartEnabled && currentState->pumpState == PUMP_OFF && targetState->pumpState != PUMP_HEATING) {
-    Serial.println("Auto restarting...");
+#ifdef DEBUG_TUB
+    Serial.println("HOTTUB->Auto restarting...");
+#endif
     setTargetState(PUMP_HEATING);
   }
 }
 
 void HotTub::targetTemperatureCheck(){
-  if (millis() - TEMP_IGNORE_TIME < lastButtonPressTime && lastButtonPressTime > 0)
+  if (millis() - TEMP_BUTTON_DELAY < lastButtonPressTime && lastButtonPressTime > 0)
     return; //leave temperatures alone until buttons aren't being pressed
 
   //if the target temperature is 0 we need to send temperature button press so that the display blinks and shows us the target temperature
-  if (currentState->targetTemperature == 0 && millis() > TEMP_IGNORE_TIME) {
-    Serial.print("Getting current target temperature...");
+  if (currentState->targetTemperature == 0 && millis() > TEMP_TARGET_INITIAL_DELAY) {
+#ifdef DEBUG_TUB
+    Serial.print("HOTTUB->Getting current target temperature...");
+#endif
     queueCommand(CMD_BTN_TEMP_DN);
     lastButtonPressTime = millis();
   }
@@ -399,12 +562,16 @@ void HotTub::targetTemperatureCheck(){
     && currentState->targetTemperature != targetState->targetTemperature)
   {
     if (currentState->targetTemperature < targetState->targetTemperature) {
-        Serial.println("Auto-Adjusting target temperature, up");
+#ifdef DEBUG_TUB
+        Serial.println("HOTTUB->Auto-Adjusting target temperature, up");
+#endif
         queueCommand(CMD_BTN_TEMP_UP);
     }
         
     if (currentState->targetTemperature > targetState->targetTemperature) {
-        Serial.println("Auto-Adjusting target temperature, down");
+#ifdef DEBUG_TUB
+        Serial.println("HOTTUB->Auto-Adjusting target temperature, down");
+#endif
         queueCommand(CMD_BTN_TEMP_DN);
     }
   }
@@ -455,7 +622,7 @@ void HotTub::targetStateCheck(){
  * Setup and loop
  */
 
-void HotTub::setup(void (&onStateChange)(int oldState, int newState)) {
+void HotTub::setup(void (&onStateChange)()) {
   stateChanged = onStateChange;
 }
 
@@ -467,7 +634,9 @@ void HotTub::loop() {
   if (millis() - WAIT_BETWEEN_SENDING_AUTO_COMMANDS < getLastCommandQueuedTime() && getLastCommandQueuedTime() > 0) {
     if (millis() - DELAY_BETWEEN_PRINTS > lastPrintTime) {
       lastPrintTime = millis();
-      Serial.println("Waiting for auto send delay");
+#ifdef DEBUG_TUB
+      Serial.println("HOTTUB->Waiting for auto send delay");
+#endif
     }
     return;
   }
@@ -476,7 +645,9 @@ void HotTub::loop() {
   if (getCommandQueueCount() == MAX_OUT_COMMANDS) {
     if (millis() - DELAY_BETWEEN_PRINTS > lastPrintTime) {
       lastPrintTime = millis();
-      Serial.println("Command queue maxed out!");
+#ifdef DEBUG_TUB
+      Serial.println("HOTTUB->Command queue maxed out!");
+#endif
     }
     return;
   }

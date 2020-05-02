@@ -23,15 +23,14 @@ SendReceive::SendReceive(int dataInPin, int dataEnablePin, int debugPin) {
 }
 
 void SendReceive::printMessageData(bool includeBreakdown) {
-  int i;
-
-  Serial.print("Data: 0x");
+  Serial.print("SR->Data: 0x");
   Serial.println(receivedCommand, HEX);
 
   if (!includeBreakdown)
     return;
-  
-  for(i = 0; i < dataIndex; i++) {
+
+  int i;
+  for (i = 0; i < dataIndex; i++) {
     Serial.print(i);
     Serial.print("\t");      
   }
@@ -81,18 +80,25 @@ void SendReceive::loop() {
 
   //dont send if we haven't received anything yet
   if (!ALLOW_SEND_WITHOUT_RECEIVE && lastCommandReceivedTime == 0) {
-    //Serial.println("Haven't received anthing yet...");
+#ifdef DEBUG_SR
+    Serial.println("SR->Haven't received anthing yet...");
+#endif
     return;
   }
 
   //dont send if we have sent one in the last 100msec
   if (millis() - WAIT_AFTER_SEND_COMMANDS < lastCommandSentTime) {
-    //Serial.println("Havent sent one for a while");    return;
+#ifdef DEBUG_SR
+    Serial.println("SR->Havent sent one for a while");    
+#endif
+    return;
   }
 
   //dont send if we've received something in the last 20 mSec
   if (millis() - WAIT_AFTER_RECEIVE_COMMAND < lastCommandReceivedTime && lastCommandReceivedTime > 0) {
-    //Serial.println("received one recently");
+#ifdef DEBUG_SR
+    Serial.println("SR->Received one recently");
+#endif
     return;
   }
 
@@ -110,9 +116,9 @@ int SendReceive::getReceiveBitTime(int bitIndex)
   }
 }
 
-word SendReceive::decode(word times[], bool states[])
+unsigned int SendReceive::decode(unsigned int times[], bool states[])
 {
-    word data = 0;
+    unsigned int data = 0;
     int decodeBit = 1;
     int bitTime = getReceiveBitTime(decodeBit);
     int remaining = 0;
@@ -140,8 +146,8 @@ word SendReceive::decode(word times[], bool states[])
         }
     }
 
-    Serial.print("Total time was ");
-    Serial.println(totalTime);
+    //Serial.print("Total time was ");
+    //Serial.println(totalTime);
 
     return data;
 }
@@ -201,27 +207,36 @@ unsigned long SendReceive::getLastCommandQueuedTime() {
   return lastCommandQueuedTime;
 }
 
-bool SendReceive::queueCommand(word command) {
+bool SendReceive::queueCommand(unsigned int command) {
+#ifdef DEBUG_SR
+  Serial.print("SR->queueingCommand 0x");Serial.println(command, HEX);
+#endif
+  
   if (commandQueueCount + 1 > MAX_OUT_COMMANDS) {
+#ifdef DEBUG_SR
     Serial.println("Too many commands in the queue, current queue is:");
-
-    for (int i = 0; i < commandQueueCount; i++) {
-      Serial.print("   ");
-      Serial.print(i);
-      Serial.print(" = 0x");
-      Serial.println(commandQueue[i], HEX);
-    }
-    
+    printCommandQueue();
+#endif
     return false;
   }
   
   commandQueue[commandQueueCount++] = command;
-  Serial.print("Queued command, count is now ");
-  Serial.println(commandQueueCount);
+#ifdef DEBUG_SR  
+  Serial.print("Queued command 0x");Serial.print(command, HEX);Serial.print(", count is now ");Serial.println(commandQueueCount);
+#endif
 
   lastCommandQueuedTime = millis();
   
   return true;
+}
+
+void SendReceive::printCommandQueue() {
+  for (int i = 0; i < commandQueueCount; i++) {
+    Serial.print("   ");
+    Serial.print(i);
+    Serial.print(" = 0x");
+    Serial.println(commandQueue[i], HEX);
+  }
 }
 
 int SendReceive::getCommandQueueCount() {
@@ -232,7 +247,7 @@ void SendReceive::processIncomingCommand() {
   if (receivedCommand == 0)
     return;  
 
-  word command = receivedCommand;
+  unsigned int command = receivedCommand;
   receivedCommand = 0;
   
   //Serial.print("Received command 0x");
@@ -245,18 +260,22 @@ void SendReceive::processIncomingCommand() {
 void SendReceive::processOutgoingCommandQueue() {
   if (commandQueueCount == 0)
     return;
+    
+#ifdef DEBUG_SR
+  Serial.println("SR->Processing outgoing command queue");
+#endif
 
-  Serial.println("Processing outgoing command queue");
-
-  word command = commandQueue[0];
+  unsigned int command = commandQueue[0];
 
   for (int i = 1; i < commandQueueCount; i++) {
     commandQueue[i-1] = commandQueue[i];
   }
   commandQueueCount--;
-
-  Serial.print("Outgoing queue count is ");
+  
+#ifdef DEBUG_SR
+  Serial.print("SR->Outgoing queue count is ");
   Serial.println(commandQueueCount);
+#endif
 
   sendCommand(command);
 
@@ -270,9 +289,11 @@ int SendReceive::getSendBitTime(int bitPos){
     }
 }
 
-void SendReceive::sendCommand(word command) {
-  Serial.print("Sending command 0x");
+void SendReceive::sendCommand(unsigned int command) {
+#ifdef DEBUG_SR
+  Serial.print("SR->Sending command 0x");
   Serial.println(command,HEX);
+#endif
 
   commandToSend = command;
   
@@ -293,8 +314,11 @@ void SendReceive::sendCommand(word command) {
   {
     send(0x00000000);
   }
-
+  
+#ifdef DEBUG_SR
   Serial.print("Sending ");
+#endif
+
   int bitTime;
   int bitCount = 0;
   bool bitValue = 0;
@@ -302,7 +326,9 @@ void SendReceive::sendCommand(word command) {
   {
     bitValue = (commandToSend & 0x1000) > 0;
     bitTime = getSendBitTime(bitCount);
+#ifdef DEBUG_SR
     Serial.print(bitValue ? "1" : "0");
+#endif
     for (i = 0; i<= bitTime; i++)
     {      
       send(bitValue ? 0xFFFFFFFF : 0x00000000);
@@ -314,7 +340,9 @@ void SendReceive::sendCommand(word command) {
     commandToSend <<= 1;
     commandToSend &= 0x3FFF;
   }
+#ifdef DEBUG_SR
   Serial.println();
+#endif
 
   delay(10);
   

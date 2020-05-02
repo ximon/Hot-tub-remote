@@ -1,6 +1,7 @@
 #include "HotTubApi.h"
 #include <ESP8266WebServer.h>
 
+//#define DEBUG_API
 
 HotTubApi::HotTubApi(ESP8266WebServer* webServer, HotTub* hotTubInstance)
  : server(webServer),
@@ -31,7 +32,9 @@ String HotTubApi::toOnOff(bool value) {
 void HotTubApi::valueNotProvided(String argumentName) {
   String output = "No " + argumentName + " provided";
   errorMessage(output);
+#ifdef DEBUG_API
   Serial.println(output);  
+#endif
 }
 
 bool HotTubApi::checkArgument(String argumentName) {
@@ -48,7 +51,7 @@ bool HotTubApi::valueIsTrue(String argumentName) {
   value.trim();
   value.toLowerCase();
   
-  return value == "on" || value == "1" || value == "true" || value == "yes";
+  return strcmp(value.c_str(), "true") == 0;
 }
 
 
@@ -57,34 +60,17 @@ bool HotTubApi::valueIsTrue(String argumentName) {
  */
 
 void HotTubApi::handle_status() {
+#ifdef DEBUG_API
   Serial.println("API->handle_status()");
-  
-  const size_t capacity = 2*JSON_OBJECT_SIZE(7) + JSON_OBJECT_SIZE(6);
-  DynamicJsonDocument doc(capacity);
-  String json;
-
-  CurrentState* currentState = hotTub->getCurrentState();
-  JsonObject currentJson = doc.createNestedObject("currentState");
-  currentJson["pumpState"] = currentState->pumpState;
-  currentJson["temperature"] = currentState->temperature;
-  currentJson["targetTemperature"] = currentState->targetTemperature;
-
-  TargetState* targetState = hotTub->getTargetState();
-  JsonObject targetJson = doc.createNestedObject("targetState");
-  targetJson["pumpState"] = targetState->pumpState;
-  targetJson["targetTemperature"] = targetState->targetTemperature;
-  
-  doc["autoRestart"] = hotTub->autoRestartEnabled;
-  doc["limitTemperature"] = hotTub->getLimitTemperature();
-  doc["temperatureLock"] = hotTub->temperatureLockEnabled;
-  doc["errorCode"] = currentState->errorCode;
-
-  serializeJson(doc, json);
+#endif
+  char* json = hotTub->getStateJson();
   okJson(json);
 }
 
 void HotTubApi::handle_pump() {
+#ifdef DEBUG_API
   Serial.println("API->handle_pump()");
+#endif
   if (checkArgument("state"))
     return;
 
@@ -94,11 +80,16 @@ void HotTubApi::handle_pump() {
   hotTub->setTargetState(enable ? PUMP_FILTERING : PUMP_OFF);
   
   okMessage(msg);
+
+#ifdef DEBUG_API
   Serial.println(msg);
+#endif
 }
 
 void HotTubApi::handle_heater() {
+#ifdef DEBUG_API
   Serial.println("API->handle_heater()");  
+#endif
   if (checkArgument("state"))
     return;
 
@@ -108,11 +99,16 @@ void HotTubApi::handle_heater() {
   hotTub->setTargetState(enable ? PUMP_HEATING : PUMP_FILTERING);
   
   okMessage(msg);
+#ifdef DEBUG_API
   Serial.println(msg);
+#endif
 }
 
 void HotTubApi::handle_blower() {
+#ifdef DEBUG_API
   Serial.println("API->handle_blower()");
+#endif
+
   if (checkArgument("state"))
     return;
 
@@ -122,32 +118,56 @@ void HotTubApi::handle_blower() {
   hotTub->setTargetState(enable ? PUMP_BUBBLES : PUMP_HEATING);//todo - configurable state after blower turned off??
     
   okMessage(msg);
+#ifdef DEBUG_API
   Serial.println(msg);
+#endif
 }
   
 void HotTubApi::handle_temperature() {
+#ifdef DEBUG_API
   Serial.println("API->handle_temperature()");
+#endif
+
   if (checkArgument("value")) 
     return;
       
   int temp = server->arg("value").toInt();
+  int tempValid = hotTub->targetTemperatureValid(temp);
   
-  if (!temperatureValid(temp, hotTub->getLimitTemperature()))
+  if (tempValid < 0) {
+    errorMessage("Target temperature below minimum of " + String(MIN_TEMP));
     return;
+  }
+
+  if (tempValid > 0) {
+    errorMessage("Target temperature above maximum of " + String(hotTub->getLimitTemperature()));
+    return;
+  }
   
   hotTub->setTargetTemperature(temp);
   setTempMessage(temp, "target temperature");
 }
 
 void HotTubApi::handle_maxTemperature() {
+#ifdef DEBUG_API
   Serial.println("API->handle_maxTemperature()");
+#endif
+
   if (checkArgument("value"))
     return;
   
   int maxTemp = server->arg("value").toInt();
- 
-  if (!temperatureValid(maxTemp, MAX_TEMP))
+  int tempValid = hotTub->maxTemperatureValid(maxTemp);
+  
+  if (tempValid < 0) {
+    errorMessage("Max temperature below minimum of " + String(MIN_TEMP));
     return;
+  }
+
+  if (tempValid > 0) {
+    errorMessage("Max temperature above maximum of " + String(MAX_TEMP));
+    return;
+  }
   
   hotTub->setLimitTemperature(maxTemp);
   setTempMessage(maxTemp, "limit temperature");
@@ -156,72 +176,85 @@ void HotTubApi::handle_maxTemperature() {
 void HotTubApi::setTempMessage(int temp, String tempType) {
   String msg = "Setting " + tempType + " to " + String(temp);
   okMessage(msg);
+
+#ifdef DEBUG_API
   Serial.println(msg);
+#endif
 }
 
-bool HotTubApi::temperatureValid(int desiredTemp, int maxTemp) {
-  bool aboveMax = desiredTemp > maxTemp;
-  bool belowMin = desiredTemp < MIN_TEMP;
-
-  if (aboveMax || belowMin) {
-    String message = (String)(aboveMax ? "Max" : "Min") + " temperature is " + (String)(aboveMax ? String(maxTemp) : String(MIN_TEMP));
-    errorMessage(message);
-    return false;
-  }
-
-  return true;
-}
 
 void HotTubApi::handle_rawCommand() {
+#ifdef DEBUG_API
   Serial.println("API->handle_rawCommand()");
+#endif
+
   if (checkArgument("command"))
     return;
 
   String commandStr =  server->arg("command");
+  
   commandStr.toLowerCase();
-  word command = strtol(commandStr.c_str(), 0, 16);
+  unsigned int command = strtol(commandStr.c_str(), 0, 16);
 
-  if (command = 0) {
-    errorMessage("Commands must be in the format 0x1234");
+#ifdef DEBUG_API
+  Serial.print("API->command = 0x");
+  Serial.println(command, HEX);
+#endif
+
+  if (command == 0) {
+    errorMessage("API->Commands must be in the format 0x1234");
     return;
   } else if (command >= 0x4000) {
-    errorMessage("Commands must be less than 0x4000");
+    errorMessage("API->Commands must be less than 0x4000");
     return;
   }
   
   String msg;
+  
   if (hotTub->queueCommand(command)){
-    msg = "Sending command " + commandStr;
+    msg = "API->Sending command " + commandStr;
   } else {
-    msg = "Too many commands in queue!";
+    msg = "API->Too many commands in queue!";
   }
   okMessage(msg);
 }
 
 void HotTubApi::handle_autoRestart() {
+#ifdef DEBUG_API
   Serial.println("API->handle_autoRestart()");
+#endif
+
   if (checkArgument("state")) 
     return;
 
   bool enable = valueIsTrue("state");
-  hotTub->autoRestartEnabled = enable;
+  hotTub->setAutoRestart(enable);
   
   String msg = "Auto restart is " + toOnOff(enable);
   okMessage(msg);
+
+#ifdef DEBUG_API
   Serial.println(msg);
+#endif
 }
 
 void HotTubApi::handle_temperatureLock() {
+#ifdef DEBUG_API
   Serial.println("API->handle_temperatureLock()");
+#endif
+
   if (checkArgument("state")) 
     return;
 
   bool enable = valueIsTrue("state");
-  hotTub->temperatureLockEnabled = enable;
+  hotTub->setTemperatureLock(enable);
 
   String msg = "Temperature lock is " + toOnOff(enable);
   okMessage(msg);
+  
+#ifdef DEBUG_API
   Serial.println(msg);
+#endif
 }
 
 /*
@@ -240,6 +273,11 @@ void HotTubApi::okMessage() {
 //pass in a message to be wrapped in a json object
 void HotTubApi::okMessage(String message) {
   okJson(toJson(message));
+}
+
+void HotTubApi::okJson(char* json) {
+  addCorsHeaders();
+  server->send(200, "application/json", json);
 }
 
 //outputs the json
