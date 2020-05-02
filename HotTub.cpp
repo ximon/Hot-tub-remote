@@ -24,7 +24,7 @@ HotTub::HotTub(int dataInPin, int dataOutPin, int debugPin)
 
 //todo - change this to return a copy of the array as we don't want external code changing its state!
 CurrentState* HotTub::getCurrentState() {
-  return currentState;;
+  return currentState;
 }
 
 TargetState* HotTub::getTargetState() {

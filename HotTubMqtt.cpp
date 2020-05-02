@@ -14,7 +14,9 @@ void HotTubMqtt::setup(void (&onMqttEvent)(char * topic, byte* payload, unsigned
 }
 
 void HotTubMqtt::setServer(char* ipAddress, int port) {
-  client.setServer(ipAddress, port);
+  mqttServer = ipAddress;
+  mqttPort = port;
+  client.setServer(mqttServer, mqttPort);
 }
 
 void HotTubMqtt::setCredentials(char* user, char* pass) {
@@ -24,6 +26,9 @@ void HotTubMqtt::setCredentials(char* user, char* pass) {
 }
 
 void HotTubMqtt::loop() {
+  if (mqttPort == 0)
+    return;
+
   if (!client.connected()) {
     reconnect();
   } else {

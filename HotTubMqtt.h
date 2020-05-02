@@ -29,6 +29,9 @@ class HotTubMqtt {
     char* getClientState();
     bool connect();
 
+    char* mqttServer;
+    int mqttPort;
+
     bool hasCredentials;
     char* mqttUser;
     char* mqttPass;
