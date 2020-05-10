@@ -29,6 +29,7 @@ private:
   void subscribe();
   bool connect();
   void sendConnected();
+  void publish(const char *topic, char *payload);
 
   char *mqttServer;
   int mqttPort;

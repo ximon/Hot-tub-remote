@@ -229,7 +229,7 @@ void HotTubMqtt::sendStatus()
   Serial.println("MQTT->Sending status json...");
 #endif
 
-  client.publish("hottub/state/status", hotTub->getStateJson());
+  publish("hottub/state/status", hotTub->getStateJson());
 }
 
 void HotTubMqtt::sendConnected()
@@ -237,7 +237,12 @@ void HotTubMqtt::sendConnected()
   char temp[10];
   ltoa(millis(), temp, 10);
 
-  client.publish("hottub/state/connected", temp);
+  publish("hottub/state/connected", temp);
+}
+
+void HotTubMqtt::publish(const char *topic, char *payload)
+{
+  client.publish_P(topic, (const uint8_t *)payload, strnlen(payload, 512), false);
 }
 
 void HotTubMqtt::subscribe()
