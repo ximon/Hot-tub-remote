@@ -43,7 +43,11 @@ On any state change a message containg the complete status is sent to the follow
 /hottub/state/status
 
 
-## Controller interface schematic
+## Controller interface
+The esp8266 connects to the hot tub via a 1 bit bus bidirectional transceiver (74LVC1T45 in this case).
+The hot side is 5v, the esp8266 side is 3v3.
+The switch in the circuit is to allow local programming, when rx is connected to d2 and the bus transceiver it prevents receiving serial data.
+
 ![Interface circuit](https://raw.githubusercontent.com/ximon/Hot-tub-remote/master/Interface.png "Interface circuit")
 
 All available commands were recorded using an OLS Logic sniffer and the [signals.xml](https://raw.githubusercontent.com/ximon/Hot-tub-remote/master/signals.xml) file was created using [WaveMe](https://waveme.weebly.com/)
