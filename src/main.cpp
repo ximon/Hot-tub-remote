@@ -1,9 +1,20 @@
+//if mqtt doesnt send the lib may need pathcing
 //todo - test waiting ~20ms after a comand has ended to send any commands
 
 //todo - option to pull line high for a short period to reset disiplay controller on error?
 
-//test temperature lock
+//mqtt sending status doesnt seem to work anymore
+
 //need to check target state changing and autorestart
+
+//target temperature changes seem a bit flakey
+//picking up which temperature is which is still a bit flaky when sending temperature buttons
+
+//need to somehow ignore first button press so it doesn;t decrease temperature when it shouldnt
+//  maybe only do this if the state is flashing??
+
+//temperature lock - ok
+//auto restart -
 
 #define HOSTNAME "HotTubRemote"
 
@@ -13,13 +24,10 @@
 #include <WiFiClient.h>
 #include <ESP8266WiFi.h>
 #include <esp8266_peri.h>
-
-#include <ESPAsyncTCP.h>
+#include <WebSocketsServer.h>
 #include <ESP8266mDNS.h>
-
 #include <ArduinoOTA.h>
 #include <SPI.h>
-#include <FS.H>
 #include "HotTub.h"
 #include "HotTubApi.h"
 #include "HotTubMqtt.h"
@@ -30,11 +38,11 @@ const char thingName[] = "HotTubRemote";
 // -- Initial password to connect to the Thing, when it creates an own Access Point.
 const char wifiInitialApPassword[] = "HotTubRemote";
 
-#define CONFIG_VERSION "beta3"
+#define CONFIG_VERSION "beta4"
 
 DNSServer dnsServer;
 ESP8266WebServer server(80);
-//WebSocketsServer webSocket(81);
+WebSocketsServer webSocket = WebSocketsServer(81);
 HTTPUpdateServer httpUpdater;
 
 #define STRING_LEN 128
@@ -63,7 +71,7 @@ void onStateChange()
 {
   hotTubMqtt.sendStatus();
 
-  //webSocket.broadcastTXT(hotTub.getStateJson());
+  webSocket.broadcastTXT(hotTub.getStateJson());
 }
 
 void handle_root()
@@ -88,36 +96,27 @@ void ICACHE_RAM_ATTR handleDataInterrupt()
   hotTub.dataInterrupt();
 }
 
-void ICACHE_RAM_ATTR handleButtonPress()
-{
-  sendTestCommand = true;
-}
-/*
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
 {
-  switch (type)
+  if (type == WStype_DISCONNECTED)
   {
-  case WStype_DISCONNECTED: // if the websocket is disconnected
     Serial.printf("[%u] Disconnected!\n", num);
-    break;
-  case WStype_CONNECTED:
-  { // if a new websocket connection is established
+  }
+  else if (type == WStype_CONNECTED)
+  {
     IPAddress ip = webSocket.remoteIP(num);
     Serial.printf("[%u] Connected from %d.%d.%d.%d url: %s\n", num, ip[0], ip[1], ip[2], ip[3], payload);
+    webSocket.sendTXT(num, hotTub.getStateJson());
   }
-  break;
-  case WStype_TEXT: // if new text data is received
+  else if (type == WStype_TEXT)
+  {
     Serial.printf("[%u] get Text: %s\n", num, payload);
-
     webSocket.sendTXT(num, "Received!");
-
-    break;
   }
 }
-*/
+
 void setupBoard()
 {
-  pinMode(BUTTON, INPUT_PULLUP);
   pinMode(DBG, OUTPUT);
   pinMode(LED, OUTPUT);
   pinMode(DATA_IN, INPUT);
@@ -125,11 +124,15 @@ void setupBoard()
   pinMode(DATA_ENABLE, OUTPUT);
   digitalWrite(DATA_OUT, 0);
   digitalWrite(DATA_ENABLE, LOW);
+
+  WiFi.hostname(HOSTNAME);
+  WiFi.setSleepMode(WIFI_NONE_SLEEP);
 }
 
 void setupMqtt()
 {
-  hotTubMqtt.setServer(mqttServer, atoi(mqttPort));
+  if (strlen(mqttServer) > 0)
+    hotTubMqtt.setServer(mqttServer, atoi(mqttPort));
 
   if (strlen(mqttUser) > 0)
     hotTubMqtt.setCredentials(&mqttUser[0], &mqttPass[0]);
@@ -137,10 +140,6 @@ void setupMqtt()
 
 void setupOTA()
 {
-  // Set Hostname
-  //String hostname();
-  WiFi.hostname(HOSTNAME);
-
   ArduinoOTA.setHostname(HOSTNAME);
   ArduinoOTA.onStart([]() {
     String type;
@@ -219,8 +218,8 @@ void setupWebServer()
 
 void setupWebSocket()
 {
-  //webSocket.begin();
-  //webSocket.onEvent(webSocketEvent);
+  webSocket.begin();
+  webSocket.onEvent(webSocketEvent);
 }
 
 void mqttCallback(char *topic, byte *payload, unsigned int length)
@@ -228,14 +227,8 @@ void mqttCallback(char *topic, byte *payload, unsigned int length)
   hotTubMqtt.callback(topic, payload, length);
 }
 
-void setupSPIFFS()
-{
-  SPIFFS.begin();
-}
-
 void enableInterrupts()
 {
-  attachInterrupt(digitalPinToInterrupt(BUTTON), handleButtonPress, FALLING);
   attachInterrupt(digitalPinToInterrupt(DATA_IN), handleDataInterrupt, CHANGE);
 }
 
@@ -250,7 +243,6 @@ void setup(void)
   setupIotWebConf();
   setupWebServer();
   setupWebSocket();
-  setupSPIFFS();
   hotTub.setup(onStateChange);
   hotTubApi.setup();
   hotTubMqtt.setup(*mqttCallback);
@@ -262,21 +254,9 @@ void loop(void)
 {
   ArduinoOTA.handle();
   iotWebConf.doLoop(); // doLoop should be called as frequently as possible.
-  //webSocket.loop();
+  webSocket.loop();
   server.handleClient();
-
-  //testCommandCheck();
 
   hotTubMqtt.loop();
   hotTub.loop();
-}
-
-void testCommandCheck()
-{
-  if (sendTestCommand)
-  {
-    sendTestCommand = false;
-
-    Serial.println("Button Pressed!");
-  }
 }

@@ -28,6 +28,7 @@ private:
   void reconnect();
   void subscribe();
   bool connect();
+  void sendConnected();
 
   char *mqttServer;
   int mqttPort;

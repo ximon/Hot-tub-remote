@@ -158,7 +158,7 @@ void HotTubMqtt::handleValueMessages(char *topic, char *message, unsigned int le
   }
 }
 
-void HotTubMqtt::handleRawCommand(char *message)
+unsigned int validateCommand(char *message)
 {
   const size_t capacity = JSON_OBJECT_SIZE(1) + 20;
   DynamicJsonDocument doc(capacity);
@@ -177,7 +177,7 @@ void HotTubMqtt::handleRawCommand(char *message)
   }
   else
   {
-    return;
+    return 0;
   }
 
   if (command == 0)
@@ -185,17 +185,26 @@ void HotTubMqtt::handleRawCommand(char *message)
 #ifdef DEBUG_MQTT
     Serial.println("MQTT->Commands must be in the format 0x1234");
 #endif
-
-    return;
+    return 0;
   }
-  else if (command >= 0x4000)
+
+  if (command >= 0x4000)
   {
 #ifdef DEBUG_MQTT
     Serial.println("MQTT->Commands must be less than 0x4000");
 #endif
-
-    return;
+    return 0;
   }
+
+  return command;
+}
+
+void HotTubMqtt::handleRawCommand(char *message)
+{
+  unsigned int command = validateCommand(message);
+
+  if (command <= 0)
+    return;
 
   if (hotTub->queueCommand(command))
   {
@@ -203,13 +212,12 @@ void HotTubMqtt::handleRawCommand(char *message)
     Serial.print("MQTT->Sending command 0x");
     Serial.println(command, HEX);
 #endif
+    return;
   }
-  else
-  {
+
 #ifdef DEBUG_MQTT
-    Serial.println("MQTT->Too many commands in queue!");
+  Serial.println("MQTT->Too many commands in queue!");
 #endif
-  }
 }
 
 void HotTubMqtt::sendStatus()
@@ -222,6 +230,14 @@ void HotTubMqtt::sendStatus()
 #endif
 
   client.publish("hottub/state/status", hotTub->getStateJson());
+}
+
+void HotTubMqtt::sendConnected()
+{
+  char temp[10];
+  ltoa(millis(), temp, 10);
+
+  client.publish("hottub/state/connected", temp);
 }
 
 void HotTubMqtt::subscribe()
@@ -267,35 +283,48 @@ void HotTubMqtt::reconnect()
 #endif
 
       subscribe();
+      sendConnected();
       sendStatus();
       return;
     }
 
 #ifdef DEBUG_MQTT
     Serial.print("failed, state = ");
+
     switch (client.state())
     {
     case -4:
       Serial.print("MQTT_CONNECTION_TIMEOUT");
+      break;
     case -3:
       Serial.print("MQTT_CONNECTION_LOST");
+      break;
     case -2:
       Serial.print("MQTT_CONNECT_FAILED");
+      break;
     case -1:
       Serial.print("MQTT_DISCONNECTED");
+      break;
     case 0:
       Serial.print("MQTT_CONNECTED");
+      break;
     case 1:
       Serial.print("MQTT_CONNECT_BAD_PROTOCOL");
+      break;
     case 2:
       Serial.print("MQTT_CONNECT_BAD_CLIENT_ID");
+      break;
     case 3:
       Serial.print("MQTT_CONNECT_UNAVAILABLE");
+      break;
     case 4:
       Serial.print("MQTT_CONNECT_BAD_CREDENTIALS");
+      break;
     case 5:
       Serial.print("MQTT_CONNECT_UNAUTHORIZED");
+      break;
     }
+
     Serial.println(" try again in 5 seconds");
 #endif
   }

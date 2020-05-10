@@ -10,6 +10,5 @@ const int DATA_OUT = 3; // GPIO3 = I2S data out
 //#define DATA_OUT_BIT 1 << DATA_OUT
 const int DBG = D8;
 const int DBG_BIT = 1 << DBG;
-const int BUTTON = D5;
 
 #endif
