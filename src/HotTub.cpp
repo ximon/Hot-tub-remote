@@ -21,7 +21,7 @@ HotTub::HotTub(int dataInPin, int dataOutPin, int debugPin)
 void HotTub::onCommandSent(unsigned int command)
 {
 #ifdef DEBUG_TUB
-  Serial.println("HOTTUB->Command Sent!");
+//  Serial.println("HOTTUB->Command Sent!");
 #endif
 
   if (command == CMD_BTN_TEMP_UP || command == CMD_BTN_TEMP_DN)
@@ -29,7 +29,7 @@ void HotTub::onCommandSent(unsigned int command)
 #ifdef DEBUG_TUB
     Serial.println("HOTTUB->Next temperature reading will be for the target temperature");
 #endif
-    temperatureDestination = TEMP_PREP_TARGET; //to capture the newly changed target temperature
+    tempButtonPressed();
   }
 }
 
@@ -48,27 +48,29 @@ void HotTub::onCommandReceived(unsigned int command)
     return;
   }
 
-  if (command >= CMD_ERROR_5 && command <= CMD_ERROR_1)
-  {
-    handleReceivedError(command);
-    return;
-  }
-
-  if ((command >= CMD_ERROR_PKT1 && command <= CMD_END) || command == CMD_FLASH)
-  {
-    handleReceivedStatus(command);
-    return;
-  }
-
-  if (command >= TEMP_104F && command <= TEMP_9C)
+  if ((command >= TEMP_104F && command <= TEMP_9C) || command == CMD_FLASH || command == CMD_BTN_TEMP_UP || command == CMD_BTN_TEMP_DN)
   {
     handleReceivedTemperature(command);
-    return;
+    //no return, we need the buttons to get picked up by other checks
+    if (command >= TEMP_104F && command <= TEMP_9C)
+      return;
   }
 
   if (command >= CMD_BTN_HEAT && command <= CMD_BTN_PUMP)
   {
     handleReceivedButton(command);
+    return;
+  }
+
+  if (command >= CMD_ERROR_PKT1 && command <= CMD_END)
+  {
+    handleReceivedStatus(command);
+    return;
+  }
+
+  if (command >= CMD_ERROR_5 && command <= CMD_ERROR_1)
+  {
+    handleReceivedError(command);
     return;
   }
 }
@@ -79,11 +81,23 @@ void HotTub::onCommandReceived(unsigned int command)
 
 void HotTub::autoRestartCheck()
 {
-  if (!manuallyTurnedOff && autoRestartEnabled && currentState->pumpState == PUMP_OFF && targetState->pumpState != PUMP_HEATING)
+  if (!autoRestartEnabled)
+    return;
+
+  if (manuallyTurnedOff)
+    return;
+
+  //todo - i thought we found a PUMP_END state???
+  //todo - why has the target state changed ??
+  if (currentState->pumpState == PUMP_OFF && targetState->pumpState != PUMP_HEATING)
   {
 #ifdef DEBUG_TUB
     Serial.println("HOTTUB->Auto restarting...");
 #endif
+
+    currentState->autoRestartCount += 1;
+    stateChanged();
+
     setTargetState(PUMP_HEATING);
   }
 }
@@ -99,7 +113,7 @@ void HotTub::targetTemperatureCheck()
 #ifdef DEBUG_TUB
     Serial.print("HOTTUB->Getting current target temperature...");
 #endif
-    queueCommand(CMD_BTN_TEMP_DN);
+    queueCommand(CMD_BTN_TEMP_DN); //send a temp down command to get the display to flash the target temp
     lastButtonPressTime = millis();
     return;
   }
@@ -111,12 +125,24 @@ void HotTub::targetTemperatureCheck()
   if (currentState->targetTemperature == targetState->targetTemperature)
     return;
 
+  if (tubMode != TM_NORMAL)
+    return;
+
+  adjustTemperatures();
+}
+
+void HotTub::adjustTemperatures()
+{
   if (currentState->targetTemperature < targetState->targetTemperature)
   {
 #ifdef DEBUG_TUB
     Serial.println("HOTTUB->Auto-Adjusting target temperature, up");
 #endif
-    queueCommand(CMD_BTN_TEMP_UP);
+    int commandsToSend = targetState->targetTemperature - currentState->targetTemperature;
+
+    //if we're not currently flashing we'll have to send an extra button to make the display flash
+    queueCommands(CMD_BTN_TEMP_UP, commandsToSend + 1);
+    lastButtonPressTime = millis();
   }
 
   if (currentState->targetTemperature > targetState->targetTemperature)
@@ -124,7 +150,12 @@ void HotTub::targetTemperatureCheck()
 #ifdef DEBUG_TUB
     Serial.println("HOTTUB->Auto-Adjusting target temperature, down");
 #endif
-    queueCommand(CMD_BTN_TEMP_DN);
+    int commandsToSend = currentState->targetTemperature - targetState->targetTemperature;
+
+    //if we're not currently flashing we'll have to send an extra button to make the display flash
+    queueCommands(CMD_BTN_TEMP_DN, commandsToSend + 1);
+
+    lastButtonPressTime = millis();
   }
 }
 
@@ -173,7 +204,10 @@ void HotTub::targetStateCheck()
 
     //if we want to heat the water and its not current heating or in heater standby send heat button
     if (currentState->pumpState != PUMP_HEATING && currentState->pumpState != PUMP_HEATER_STANDBY)
-      queueCommand(CMD_BTN_HEAT);
+    {
+      if (targetState->pumpState == PUMP_HEATING)
+        queueCommand(CMD_BTN_HEAT);
+    }
 
     return;
   }

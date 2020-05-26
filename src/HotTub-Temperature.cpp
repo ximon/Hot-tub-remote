@@ -1,75 +1,110 @@
 #include "HotTub.h"
 
+#define TEMPS_BETWEEN_FLASHES 4
+
+int nextFlashCountdown = 0;
+int lastFlashingTemperatureReading;
+
+uint lastCommand;
+
 void HotTub::handleReceivedTemperature(unsigned int command)
 {
-    int temperature = decodeTemperature(command);
+    int newTemp = decodeTemperature(command);
+
+    nextFlashCountdown -= nextFlashCountdown > 0 ? 1 : 0; //decrement flash timeout counter;
+
+    if (tubMode == TM_FLASHING && nextFlashCountdown == 0)
+        tubMode = TM_NORMAL;
+
+    if (tubMode == TM_NORMAL && newTemp > 0)
+        updateCurrentTemperature(newTemp);
+
+    if (command == CMD_FLASH)
+    {
+        //reset countdown
+        nextFlashCountdown = TEMPS_BETWEEN_FLASHES + 1;
+
+        //if we're flashing
+        tubMode = tubMode == TM_FLASH_DETECTED || tubMode == TM_FLASHING
+                      ? TM_FLASHING
+                      : TM_FLASH_DETECTED;
+
+        if (tubMode == TM_FLASHING)
+            updateTargetTemperature(lastFlashingTemperatureReading);
+    }
+
+    if (command == lastCommand)
+        return;
+
+    lastCommand = command;
+
+    //if a temp button is pressed
+    if (command == CMD_BTN_TEMP_DN || command == CMD_BTN_TEMP_UP)
+    {
+        //ignore all temperature readings until a flash is detected, or timeout
+        tempButtonPressed();
+        return;
+    }
+
+    if (tubMode == TM_TEMP_BUTTON_DETECTED)
+    {
+        nextFlashCountdown -= nextFlashCountdown > 0 ? 1 : 0;
+
+        if (nextFlashCountdown == 0)
+            tubMode = TM_NORMAL;
+
+        return;
+    }
+
+    if (tubMode == TM_FLASHING || tubMode == TM_FLASH_DETECTED)
+    {
+        lastFlashingTemperatureReading = newTemp;
+        return;
+    }
+
+    //its a temperature command
+    lastFlashingTemperatureReading = 0;
+    updateCurrentTemperature(newTemp);
 
 #ifdef DEBUG_TUB_VERBOSE
     Serial.print("HOTTUB->Decoding temperature command, ");
     Serial.print("received ");
     Serial.println(temperature);
 #endif
+}
 
-    switch (temperatureDestination)
-    {
-    case TEMP_PREP_CURRENT:
-        if (millis() - TEMP_CURRENT_DELAY > tempIgnoreStart || !currentState->flashing)
-        {
-            temperatureDestination = TEMP_CURRENT;
-#ifdef DEBUG_TUB_VERBOSE
-            Serial.println("HOTTUB->Next reading will be for the current temperature");
-#endif
-        }
-        else
-        {
-#ifdef DEBUG_TUB_VERBOSE
-            Serial.println("HOTTUB->Ignoring Current Temperature reading...");
-#endif
-        }
-        break;
+void HotTub::tempButtonPressed()
+{
+    tubMode = TM_TEMP_BUTTON_DETECTED;
+    nextFlashCountdown = TEMPS_BETWEEN_FLASHES + 1;
+}
 
-    case TEMP_CURRENT:
-        if (currentState->temperature != temperature)
-        {
-            currentState->temperature = temperature;
-            stateChanged();
-        }
-#ifdef DEBUG_TUB_VERBOSE
-        Serial.print("HOTTUB->Temperature is ");
-        Serial.println(currentState->temperature);
-#endif
-        break;
+void HotTub::updateCurrentTemperature(int temperature)
+{
+    if (temperature <= 0)
+        return;
+    if (currentState->temperature == temperature)
+        return;
 
-    case TEMP_PREP_TARGET:
-        if (millis() - TEMP_TARGET_DELAY > tempIgnoreStart)
-        {
-#ifdef DEBUG_TUB
-            Serial.println("HOTTUB->Next reading will be for the Target Temperature");
-#endif
-            temperatureDestination = TEMP_TARGET;
-        }
-#ifdef DEBUG_TUB
-        else
-        {
-            Serial.println("HOTTUB->Ignoring Target Temperature reading...");
-        }
-#endif
-        break;
-    case TEMP_TARGET:
-        if (currentState->targetTemperature != temperature)
-        {
-            currentState->targetTemperature = temperature;
-            stateChanged();
-        }
-#ifdef DEBUG_TUB_VERBOSE
-        Serial.print("HOTTUB->Target temperature is ");
-        Serial.println(currentState->targetTemperature);
-#endif
+    Serial.print("HOTTUB->Setting current temperature to ");
+    Serial.println(temperature);
 
-        tempIgnoreStart = millis();
-        temperatureDestination = TEMP_PREP_CURRENT;
-        break;
-    }
+    currentState->temperature = temperature;
+    stateChanged();
+}
+
+void HotTub::updateTargetTemperature(int temperature)
+{
+    if (temperature <= 0)
+        return;
+    if (currentState->targetTemperature == temperature)
+        return;
+
+    Serial.print("HOTTUB->Setting target temperature to ");
+    Serial.println(temperature);
+
+    currentState->targetTemperature = temperature;
+    stateChanged();
 }
 
 int HotTub::setTargetTemperature(int temp)

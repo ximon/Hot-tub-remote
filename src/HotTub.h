@@ -13,13 +13,13 @@
 
 #define DELAY_BETWEEN_PRINTS 1000
 
-#define TEMP_BUTTON_DELAY 5000         //time to wait after a button is pressed to run the target temperature check
+#define TEMP_BUTTON_DELAY 2000         //time to wait after a button is pressed to run the target temperature check
 #define TEMP_TARGET_INITIAL_DELAY 6000 //Time to wait before sending a button command to get the target temperature
 #define TEMP_CURRENT_DELAY 6000        //Time to wait before taking the reading as the current temperature
 #define TEMP_TARGET_DELAY 250          //Time to wait before taking the reading as the target temperature
 
 #define TEMP_ADJUST_DELAY 3000 //must be less than TEMP_IGNORE_TIME!!
-#define BUTTON_SEND_DELAY 3000 //time to wait before sending buttons to change state
+#define BUTTON_SEND_DELAY 1000 //time to wait before sending buttons to change state
 
 //todo - extract Serial.print lines to a debug function that can be handled externally.
 
@@ -40,7 +40,8 @@ struct CurrentState
   int targetTemperature; //Pump's current water temperature
   bool temperatureIsCelsius;
 
-  bool flashing; //whether the display is blinking or not
+  bool flashing;                 //whether the display is blinking or not
+  unsigned int autoRestartCount; //the number of times autorestart has started the pump;
 
   int errorCode;
 };
@@ -51,10 +52,11 @@ struct TargetState
   int targetTemperature; //Target temperature we want to set the pump to
 };
 
-#define TEMP_CURRENT 0      //received temperatures will be used as the current temperature
-#define TEMP_TARGET 1       //received temperatures will be used as the target temperature
-#define TEMP_PREP_CURRENT 2 //received temperatures will be ignored, preparing to set Current Temp
-#define TEMP_PREP_TARGET 3  //received temperatures will be ignored, prepaing to set Target Temp
+#define TM_NORMAL 0               //temperatures are current temperatures
+#define TM_TEMP_BUTTON_DETECTED 1 //ignore temperatures until we know if it's flashing
+#define TM_FLASH_DETECTED 2       //flash detected, wait for next flash to confirm
+#define TM_FLASHING 3             //the display is currently flashing
+#define TM_TEMP_MANUAL_CHANGE 4   //the target temperature was changed on the pump
 
 class HotTub : public SendReceive
 {
@@ -93,7 +95,6 @@ private:
 
   unsigned long tempIgnoreStart = 0; //start time to ignore temperature commands from
 
-  int temperatureDestination = TEMP_PREP_CURRENT;
   bool manuallyTurnedOff;          //indicates to the autoRestart code that the pump was turned off via the button / command, rather than the 24h timeout
   int limitTemperature = MAX_TEMP; //limits the temperature that can be set to via the control panel
   bool limitTemperatureIsCelsius;
@@ -103,20 +104,21 @@ private:
 
   void autoRestartCheck();
   void targetTemperatureCheck();
+  void adjustTemperatures();
   void targetStateCheck();
 
   int decodeStatus(unsigned int statusCommand);
   int decodeError(unsigned int errorCommand);
   int decodeTemperature(unsigned int temperatureCommand);
 
-  void handleStatus(unsigned int command);
-  void handleError(unsigned int command);
-  void handleTemperature(unsigned int command);
-
   void handleReceivedError(unsigned int command);
   void handleReceivedStatus(unsigned int command);
   void handleReceivedTemperature(unsigned int command);
   void handleReceivedButton(unsigned int command);
+
+  void tempButtonPressed();
+  void updateTargetTemperature(int temperature);
+  void updateCurrentTemperature(int temperature);
 
   String stateToString(int pumpState);
   String errorToString(int errorCode);
@@ -125,6 +127,8 @@ private:
   void setReceivedTemperature(int temperature);
 
   unsigned long lastButtonPressTime;
+
+  int tubMode = TM_NORMAL;
 };
 
 #endif

@@ -1,7 +1,6 @@
 #include "HotTub.h"
 
-#define STATUS_COMMANDS_UNTIL_NOT_FLASHING 3
-int flashCountdown;
+unsigned long flashStartTime;
 
 void HotTub::handleReceivedStatus(unsigned int command)
 {
@@ -18,30 +17,6 @@ void HotTub::handleReceivedStatus(unsigned int command)
 
     if (decodedState == PUMP_UNKNOWN)
         return;
-
-    if (decodedState == PUMP_FLASH)
-    {
-        if (temperatureDestination == TEMP_CURRENT)
-        {
-            temperatureDestination = TEMP_PREP_TARGET;
-            tempIgnoreStart = millis();
-        }
-
-        if (!currentState->flashing)
-        {
-            currentState->flashing = true;
-            flashCountdown = STATUS_COMMANDS_UNTIL_NOT_FLASHING;
-            stateChanged();
-        }
-
-        return;
-    }
-
-    if (currentState->flashing && flashCountdown-- == 0)
-    {
-        currentState->flashing = false;
-        stateChanged();
-    }
 
     //if we dont yet have a target state, just pick up the current state as the target.
     if (targetState->pumpState == PUMP_UNKNOWN)

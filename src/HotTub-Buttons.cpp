@@ -13,12 +13,9 @@ void HotTub::handleReceivedButton(unsigned int command)
     case CMD_BTN_TEMP_UP:
     case CMD_BTN_TEMP_DN:
     {
-        //if the display isnt flashing then the temperature doesn't change
-        if (!currentState->flashing)
+        //if its not flashing then the temperature won't change
+        if (tubMode != TM_FLASHING && tubMode != TM_FLASH_DETECTED)
             return;
-
-        temperatureDestination = TEMP_PREP_TARGET;
-        tempIgnoreStart = millis();
 
         if (temperatureLockEnabled)
         {
@@ -44,6 +41,7 @@ void HotTub::handleReceivedButton(unsigned int command)
         if (newTargetTemp < MIN_TEMP)
             newTargetTemp = MIN_TEMP;
 
+        //tubMode = TM_TEMP_MANUAL_CHANGE;
         setTargetTemperature(newTargetTemp);
 
 #ifdef DEBUG_TUB
@@ -55,6 +53,9 @@ void HotTub::handleReceivedButton(unsigned int command)
     case CMD_BTN_PUMP:
         if (currentState->pumpState == PUMP_FILTERING || currentState->pumpState == PUMP_HEATER_STANDBY || currentState->pumpState == PUMP_HEATING)
         {
+            //currentState = PUMP_OFF
+            //targetState = PUMP_OFF;
+            //set some delay to 5secs to prevent sending commands
             //todo - this should really just set the target state to PUMP_OFF and start the pumpOffDelay of 5 seconds
             manuallyTurnedOff = true;
         }
