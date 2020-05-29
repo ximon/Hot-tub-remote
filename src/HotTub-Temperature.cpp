@@ -39,7 +39,7 @@ void HotTub::handleReceivedTemperature(unsigned int command)
     lastCommand = command;
 
     //if a temp button is pressed
-    if (command == CMD_BTN_TEMP_DN || command == CMD_BTN_TEMP_UP)
+    if ((command == CMD_BTN_TEMP_DN || command == CMD_BTN_TEMP_UP) && tubMode == TM_NORMAL)
     {
         //ignore all temperature readings until a flash is detected, or timeout
         tempButtonPressed();
@@ -85,10 +85,10 @@ void HotTub::updateCurrentTemperature(int temperature)
         return;
     if (currentState->temperature == temperature)
         return;
-
+#ifdef DEBUG_TUB
     Serial.print("HOTTUB->Setting current temperature to ");
     Serial.println(temperature);
-
+#endif
     currentState->temperature = temperature;
     stateChanged();
 }
@@ -99,14 +99,15 @@ void HotTub::updateTargetTemperature(int temperature)
         return;
     if (currentState->targetTemperature == temperature)
         return;
-
+#ifdef DEBUG_TUB
     Serial.print("HOTTUB->Setting target temperature to ");
     Serial.println(temperature);
-
+#endif
     currentState->targetTemperature = temperature;
     stateChanged();
 }
 
+//sets the target state's target temperature
 int HotTub::setTargetTemperature(int temp)
 {
     int status = targetTemperatureValid(temp);
@@ -165,11 +166,13 @@ int HotTub::maxTemperatureValid(int maxTemp)
     return tempValid(maxTemp, MIN_TEMP, MAX_TEMP);
 }
 
+//returns 0 is the supplied target temperature is within the ranges
 int HotTub::targetTemperatureValid(int targetTemp)
 {
     return tempValid(targetTemp, MIN_TEMP, limitTemperature);
 }
 
+//returns 0 is the supplied temperature is within the ranges
 int HotTub::tempValid(int temperature, int minTemp, int maxTemp)
 {
     bool aboveMax = temperature > maxTemp;
