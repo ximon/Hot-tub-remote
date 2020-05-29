@@ -170,7 +170,7 @@ unsigned int SendReceive::decode(unsigned int times[], bool states[])
 void ICACHE_RAM_ATTR SendReceive::dataInterrupt()
 {
   now = micros();
-  bitState = digitalRead(dataInPin);
+  bitState = GPIP(dataInPin);
 
   if (SEND_MODE != SM_WAIT)
     return;
