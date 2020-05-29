@@ -239,3 +239,22 @@ String HotTub::stateToString(int pumpState)
         return "UNKNOWN!!!";
     }
 }
+
+String HotTub::tubModeToString(int tubMode)
+{
+    switch (tubMode)
+    {
+    case TM_NORMAL:
+        return "Normal";
+    case TM_FLASH_DETECTED:
+        return "Flash detected";
+    case TM_FLASHING:
+        return "Flashing";
+    case TM_TEMP_BUTTON_DETECTED:
+        return "Temp button detected";
+    case TM_TEMP_MANUAL_CHANGE:
+        return "Temp manual change";
+    default:
+        return "UNKNOWN!!";
+    }
+}
