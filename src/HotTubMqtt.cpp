@@ -73,7 +73,7 @@ void HotTubMqtt::callback(char *topic, byte *payload, unsigned int length)
       strcmp(topic, "hottub/cmnd/temperature/max") == 0)
   {
 #ifdef DEBUG_MQTT
-    Serial.print("MQTT->Handing value message");
+    Serial.println("MQTT->Handing value message");
 #endif
 
     handleValueMessages(topic, message, length);
@@ -234,10 +234,26 @@ void HotTubMqtt::sendStatus()
 
 void HotTubMqtt::sendConnected()
 {
-  char temp[10];
-  ltoa(millis(), temp, 10);
+  struct rst_info *rst = system_get_rst_info();
+  const char *reasons[] = {"Normal Startup", "Hardware WDT", "Exception", "Software WDT", "Soft Restart", "Deep Sleep Awake", "External System Reset"};
 
-  publish("hottub/state/connected", temp);
+  const size_t capacity = 2 * JSON_OBJECT_SIZE(1) + JSON_OBJECT_SIZE(8);
+  DynamicJsonDocument doc(capacity);
+  char *json = new char[300];
+
+  JsonObject resetInfo = doc.createNestedObject("resetInfo");
+  resetInfo["reasonCode"] = rst->reason;
+  resetInfo["reason"] = reasons[rst->reason];
+  resetInfo["exccause"] = rst->exccause;
+  resetInfo["excvaddr"] = rst->excvaddr;
+  resetInfo["epc1"] = rst->epc1;
+  resetInfo["epc2"] = rst->epc2;
+  resetInfo["epc3"] = rst->epc3;
+  resetInfo["depc"] = rst->depc;
+
+  serializeJson(doc, json, 300);
+
+  publish("hottub/state/connected", json);
 }
 
 void HotTubMqtt::publish(const char *topic, char *payload)
@@ -265,6 +281,14 @@ bool HotTubMqtt::connect()
     return client.connect(clientId.c_str(), mqttUser, mqttPass);
 
   return client.connect(clientId.c_str());
+  /*
+  char clientId[15] = "HotTubRemote";
+
+  if (hasCredentials)
+    return client.connect(clientId, mqttUser, mqttPass);
+
+  return client.connect(clientId);
+*/
 }
 
 unsigned long lastConnectAttempt = 0;

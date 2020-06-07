@@ -157,6 +157,10 @@ int HotTub::decodeStatus(unsigned int statusCommand)
     case CMD_FLASH:
         return PUMP_FLASH;
 
+    case CMD_ERROR_PKT1:
+    case CMD_ERROR_PKT2:
+        return PUMP_ERROR;
+
     default:
         return PUMP_UNKNOWN;
     }
@@ -183,78 +187,78 @@ int HotTub::decodeError(unsigned int errorCommand)
     }
 }
 
-String HotTub::errorToString(int errorCode)
+char *HotTub::errorToString(int errorCode)
 {
     switch (errorCode)
     {
     case 1:
-        return "Flow sensor stuck in on state";
+        return (char *)"Flow sensor stuck in on state";
     case 2:
-        return "Flow sensor stuck in off state";
+        return (char *)"Flow sensor stuck in off state";
     case 3:
-        return "Water temperature below 4C";
+        return (char *)"Water temperature below 4C";
     case 4:
-        return "Water temperature above 50C";
+        return (char *)"Water temperature above 50C";
     case 5:
-        return "Unsuitable power supply";
+        return (char *)"Unsuitable power supply";
     default:
-        return "UNKNOWN!!!";
+        return (char *)"UNKNOWN!!!";
     }
 }
 
-String HotTub::buttonToString(int buttonCommand)
+char *HotTub::buttonToString(int buttonCommand)
 {
     switch (buttonCommand)
     {
     case CMD_BTN_HEAT:
-        return "Heater";
+        return (char *)"Heater";
     case CMD_BTN_PUMP:
-        return "Pump";
+        return (char *)"Pump";
     case CMD_BTN_BLOW:
-        return "Blower";
+        return (char *)"Blower";
     case CMD_BTN_TEMP_DN:
-        return "Temperature down";
+        return (char *)"Temperature down";
     case CMD_BTN_TEMP_UP:
-        return "Temperature up";
+        return (char *)"Temperature up";
     default:
-        return "UNKNOWN!!!";
+        return (char *)"UNKNOWN!!!";
     }
 }
 
-String HotTub::stateToString(int pumpState)
+char *HotTub::stateToString(int pumpState)
 {
     switch (pumpState)
     {
     case PUMP_OFF:
-        return "Off";
+        return (char *)"Off";
     case PUMP_FILTERING:
-        return "Filtering";
+        return (char *)"Filtering";
     case PUMP_HEATING:
-        return "Heating";
+        return (char *)"Heating";
     case PUMP_HEATER_STANDBY:
-        return "Heater on Standby";
+        return (char *)"Heater Standby";
     case PUMP_BUBBLES:
-        return "Bubbles";
+        return (char *)"Bubbles";
     default:
-        return "UNKNOWN!!!";
+        return (char *)"UNKNOWN!!!";
     }
 }
 
-String HotTub::tubModeToString(int tubMode)
+char *HotTub::tubModeToString(int tubMode)
 {
     switch (tubMode)
     {
     case TM_NORMAL:
-        return "Normal";
+        return (char *)"Normal";
     case TM_FLASH_DETECTED:
-        return "Flash detected";
+        return (char *)"Flash detected";
     case TM_FLASHING:
-        return "Flashing";
+        return (char *)"Flashing";
     case TM_TEMP_BUTTON_DETECTED:
-        return "Temp button detected";
+        return (char *)"Temp button detected";
     case TM_TEMP_MANUAL_CHANGE:
-        return "Temp manual change";
+        return (char *)"Temp manual change";
     default:
-        return "UNKNOWN!!";
+        return (char *)"UNKNOWN!!";
     }
 }

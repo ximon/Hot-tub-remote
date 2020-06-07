@@ -56,6 +56,16 @@ void SendReceive::printMessageData(bool includeBreakdown)
   Serial.println();
 }
 
+void SendReceive::setup(
+    void (&onSetDataInterrupt)(bool state),
+    void (&onDebug)(char *message),
+    void (&onDebugf)(char *fmt, ...))
+{
+  setDataInterrupt = onSetDataInterrupt;
+  debug = onDebug;
+  debugf = onDebugf;
+}
+
 int eraseCount;
 void SendReceive::loop()
 {
@@ -139,7 +149,7 @@ unsigned int SendReceive::decode(unsigned int times[], bool states[])
   int remaining = 0;
   int totalTime = times[0];
 
-  for (int i = 1; i < 13; i++)
+  for (int i = 1; i < BIT_COUNT; i++)
   {
     remaining = times[i];
 
@@ -169,8 +179,17 @@ unsigned int SendReceive::decode(unsigned int times[], bool states[])
 
 void ICACHE_RAM_ATTR SendReceive::dataInterrupt()
 {
+  if (SEND_MODE == SM_SENDING)
+    return;
+
   now = micros();
   bitState = GPIP(dataInPin);
+
+  if (dataIndex > BIT_COUNT)
+  {
+    dataIndex = 0;
+    return;
+  }
 
   if (SEND_MODE != SM_WAIT)
     return;
@@ -338,6 +357,8 @@ int SendReceive::getSendBitTime(int bitPos)
 
 void SendReceive::sendCommand(unsigned int command)
 {
+  setDataInterrupt(false);
+
 #ifdef DEBUG_SR
   Serial.print("SR->Sending command 0x");
   Serial.println(command, HEX);
@@ -354,12 +375,12 @@ void SendReceive::sendCommand(unsigned int command)
   int i = 0;
 
   //Start Pulse
-  for (i = 0; i <= 440; i++)
+  for (i = 0; i <= START_PULSE_COUNT; i++)
   {
     send(0xFFFFFFFF);
   }
 
-  for (i = 0; i <= 18; i++)
+  for (i = 0; i <= START_SPACE_COUNT; i++)
   {
     send(0x00000000);
   }
@@ -381,8 +402,6 @@ void SendReceive::sendCommand(unsigned int command)
     for (i = 0; i <= bitTime; i++)
     {
       send(bitValue ? 0xFFFFFFFF : 0x00000000);
-      if (i % 1000 > 0)
-        yield();
     }
 
     bitCount++;
@@ -401,4 +420,6 @@ void SendReceive::sendCommand(unsigned int command)
   SEND_MODE = SM_WAIT;
 
   i2s_end();
+
+  setDataInterrupt(true);
 }

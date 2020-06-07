@@ -2,6 +2,8 @@
 
 #define TEMPS_BETWEEN_FLASHES 4
 
+#define DEBUG_TUB
+
 int nextFlashCountdown = 0;
 int lastFlashingTemperatureReading;
 
@@ -9,6 +11,7 @@ uint lastCommand;
 
 void HotTub::handleReceivedTemperature(unsigned int command)
 {
+    int originalTubMode = tubMode;
     int newTemp = decodeTemperature(command);
 
     nextFlashCountdown -= nextFlashCountdown > 0 ? 1 : 0; //decrement flash timeout counter;
@@ -32,10 +35,14 @@ void HotTub::handleReceivedTemperature(unsigned int command)
         if (tubMode == TM_FLASHING)
             updateTargetTemperature(lastFlashingTemperatureReading);
     }
-
+    /*
     if (command == lastCommand)
+    {
+        if (tubMode != originalTubMode)
+            stateChanged("Tub Mode changed");
         return;
-
+    }
+    */
     lastCommand = command;
 
     //if a temp button is pressed
@@ -51,7 +58,10 @@ void HotTub::handleReceivedTemperature(unsigned int command)
         nextFlashCountdown -= nextFlashCountdown > 0 ? 1 : 0;
 
         if (nextFlashCountdown == 0)
+        {
             tubMode = TM_NORMAL;
+            //stateChanged("Tub mode changed");
+        }
 
         return;
     }
@@ -59,18 +69,13 @@ void HotTub::handleReceivedTemperature(unsigned int command)
     if (tubMode == TM_FLASHING || tubMode == TM_FLASH_DETECTED)
     {
         lastFlashingTemperatureReading = newTemp;
+        //stateChanged("Flashing changed");
         return;
     }
 
     //its a temperature command
     lastFlashingTemperatureReading = 0;
     updateCurrentTemperature(newTemp);
-
-#ifdef DEBUG_TUB_VERBOSE
-    Serial.print("HOTTUB->Decoding temperature command, ");
-    Serial.print("received ");
-    Serial.println(temperature);
-#endif
 }
 
 void HotTub::tempButtonPressed()
@@ -83,45 +88,60 @@ void HotTub::updateCurrentTemperature(int temperature)
 {
     if (temperature <= 0)
         return;
+
     if (currentState->temperature == temperature)
         return;
+
 #ifdef DEBUG_TUB
-    Serial.print("HOTTUB->Setting current temperature to ");
-    Serial.println(temperature);
+    debugf("HOTTUB->Changing current temperature from '%i' to '%i'", currentState->temperature, temperature);
 #endif
+
     currentState->temperature = temperature;
-    stateChanged();
+    stateChanged("Current temperature changed");
 }
 
+//Set the current target temperature, i.e. the one the tub is displaying
 void HotTub::updateTargetTemperature(int temperature)
 {
     if (temperature <= 0)
         return;
+
     if (currentState->targetTemperature == temperature)
         return;
+
+    if (targetState->targetTemperature == INIT_TEMP)
+    {
 #ifdef DEBUG_TUB
-    Serial.print("HOTTUB->Setting target temperature to ");
-    Serial.println(temperature);
+        debugf("HOTTUB->Changing target target temperature from '%i' to '%i'", targetState->targetTemperature, temperature);
 #endif
+        targetState->targetTemperature = temperature;
+    }
+
+#ifdef DEBUG_TUB
+    debugf("HOTTUB->Changing current target temperature from '%i' to '%i'", currentState->targetTemperature, temperature);
+#endif
+
     currentState->targetTemperature = temperature;
-    stateChanged();
+    stateChanged("Current Target temperature changed");
 }
 
-//sets the target state's target temperature
-int HotTub::setTargetTemperature(int temp)
+//sets the target state's target temperature, the one to aim to set the tub to
+int HotTub::setTargetTemperature(int temperature)
 {
-    int status = targetTemperatureValid(temp);
+    if (temperature == targetState->targetTemperature)
+        return 0;
+
+    int status = targetTemperatureValid(temperature);
 
     if (status != 0)
         return 0;
 
 #ifdef DEBUG_TUB
-    Serial.print("HOTTUB->Setting target temperature to ");
-    Serial.println(temp);
+    debugf("HOTTUB->Changing target target temperature from '%i' to '%i'", targetState->targetTemperature, temperature);
 #endif
 
-    targetState->targetTemperature = temp;
-    stateChanged();
+    targetState->targetTemperature = temperature;
+    stateChanged("Target Target temperature changed");
 
     return status;
 }
@@ -131,26 +151,26 @@ int HotTub::getLimitTemperature()
     return limitTemperature;
 }
 
-int HotTub::setLimitTemperature(int temp)
+int HotTub::setLimitTemperature(int temperature)
 {
-    int status = maxTemperatureValid(temp);
+    if (temperature == limitTemperature)
+        return 0;
+
+    int status = maxTemperatureValid(temperature);
 
     if (status != 0)
         return 0;
 
 #ifdef DEBUG_TUB
-    Serial.print("HOTTUB->Setting limit temperature to ");
-    Serial.println(temp);
+    debugf("HOTTUB->Changing limit temperature from '%i' to '%i'", limitTemperature, temperature);
 #endif
 
-    limitTemperature = temp;
+    limitTemperature = temperature;
 
-    if (targetState->targetTemperature > temp)
-    {
-        targetState->targetTemperature = temp;
-    }
+    if (targetState->targetTemperature > temperature)
+        targetState->targetTemperature = temperature;
 
-    stateChanged();
+    stateChanged("Temperature limit changed");
 
     return status;
 }
@@ -158,7 +178,7 @@ int HotTub::setLimitTemperature(int temp)
 void HotTub::setTemperatureLock(bool enable)
 {
     temperatureLockEnabled = enable;
-    stateChanged();
+    stateChanged("Temperature lock changed");
 }
 
 int HotTub::maxTemperatureValid(int maxTemp)

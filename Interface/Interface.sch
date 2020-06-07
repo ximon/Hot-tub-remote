@@ -15,17 +15,6 @@ Comment3 ""
 Comment4 ""
 $EndDescr
 $Comp
-L power:VCC #PWR?
-U 1 1 5D70837B
-P 3800 1700
-F 0 "#PWR?" H 3800 1550 50  0001 C CNN
-F 1 "VCC" H 3817 1873 50  0000 C CNN
-F 2 "" H 3800 1700 50  0001 C CNN
-F 3 "" H 3800 1700 50  0001 C CNN
-	1    3800 1700
-	1    0    0    -1  
-$EndComp
-$Comp
 L Logic_LevelTranslator:SN74LVC1T45DCK U1
 U 1 1 5E9CDB6D
 P 5200 1950
@@ -38,8 +27,6 @@ F 3 "http://www.ti.com/lit/ds/symlink/sn74lvc1t45.pdf" H 4300 1300 50  0001 C CN
 $EndComp
 Wire Wire Line
 	4400 2150 4800 2150
-Wire Wire Line
-	5300 1550 5300 1500
 Wire Wire Line
 	5100 1550 5100 1500
 Text GLabel 4400 1850 0    50   Input ~ 0
@@ -77,17 +64,6 @@ F 3 "~" H 3800 1850 50  0001 C CNN
 $EndComp
 $Comp
 L power:GND #PWR?
-U 1 1 5D708717
-P 3800 2000
-F 0 "#PWR?" H 3800 1750 50  0001 C CNN
-F 1 "GND" H 3805 1827 50  0000 C CNN
-F 2 "" H 3800 2000 50  0001 C CNN
-F 3 "" H 3800 2000 50  0001 C CNN
-	1    3800 2000
-	1    0    0    -1  
-$EndComp
-$Comp
-L power:GND #PWR?
 U 1 1 5E9D72B6
 P 5200 2450
 F 0 "#PWR?" H 5200 2200 50  0001 C CNN
@@ -120,16 +96,40 @@ Wire Wire Line
 Connection ~ 4750 1950
 Wire Wire Line
 	4450 1850 4400 1850
-Wire Wire Line
-	5300 1500 5900 1500
-Text GLabel 5900 1500 2    50   Input ~ 0
+Text GLabel 5850 1350 2    50   Input ~ 0
 5V
 Text GLabel 4450 2350 0    50   Input ~ 0
 GND
 Wire Wire Line
 	4450 2350 5200 2350
-Text Notes 4250 1350 0    50   ~ 0
+Text Notes 4250 1250 0    50   ~ 0
 ESP8266
-Text Notes 5750 1350 0    50   ~ 0
-Hot Tub
+Text Notes 5450 1250 0    50   ~ 0
+Hot Tub 3-pin
+Text GLabel 4400 1350 0    50   Input ~ 0
+5V
+Wire Wire Line
+	4400 1350 5300 1350
+Connection ~ 5300 1350
+Wire Wire Line
+	5300 1350 5900 1350
+Wire Wire Line
+	5300 1350 5300 1550
+$Comp
+L power:GND #PWR?
+U 1 1 5D708717
+P 3800 2000
+F 0 "#PWR?" H 3800 1750 50  0001 C CNN
+F 1 "GND" H 3805 1827 50  0000 C CNN
+F 2 "" H 3800 2000 50  0001 C CNN
+F 3 "" H 3800 2000 50  0001 C CNN
+	1    3800 2000
+	1    0    0    -1  
+$EndComp
+Text GLabel 3800 1550 1    50   Input ~ 0
+5V
+Wire Wire Line
+	3750 1550 3800 1550
+Wire Wire Line
+	3800 1550 3800 1700
 $EndSCHEMATC

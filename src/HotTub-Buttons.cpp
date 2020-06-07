@@ -5,9 +5,7 @@
 void HotTub::handleReceivedButton(unsigned int command)
 {
 #ifdef DEBUG_TUB
-    Serial.print("HOTTUB->Decoding button command,");
-    Serial.print(buttonToString(command));
-    Serial.println(" button was pressed");
+    debugf("HOTTUB->Button '%s' was pressed", buttonToString(command));
 #endif
 
     switch (command)
@@ -23,7 +21,7 @@ void HotTub::handleReceivedButton(unsigned int command)
         switch (currentState->pumpState)
         {
         case PUMP_HEATING:
-            //set some delay to 5secs to prevent sending commands
+            //todo - set some delay to 5secs to prevent sending commands
         case PUMP_BUBBLES:
         case PUMP_FILTERING:
         case PUMP_HEATER_STANDBY:
@@ -46,6 +44,7 @@ void HotTub::handleReceivedButton(unsigned int command)
 
         case PUMP_HEATING:
         case PUMP_HEATER_STANDBY:
+            //todo - set some delay to 5secs to prevent sending commands
             targetState->pumpState = PUMP_FILTERING;
             break;
         }
@@ -67,23 +66,19 @@ void HotTub::handleTempButtonPress(unsigned int command)
     //if its not flashing then the temperature won't change
     if (tubMode != TM_FLASHING && tubMode != TM_FLASH_DETECTED)
     {
-        Serial.print("HOTTUB->Ignoring, TubMode was ");
-        Serial.println(tubModeToString(tubMode));
+#ifdef DEBUG_TUB
+        debugf("HOTTUB->Ignoring button press, tubmode was '%s'", tubModeToString(tubMode));
+#endif
         return;
     }
 
     if (temperatureLockEnabled)
     {
 #ifdef DEBUG_TUB
-        Serial.println("HOTTUB->Temperature is locked, keeping current target temperature");
+        debug("HOTTUB->Temperature is locked, keeping current target temperature");
 #endif
         return;
     }
-
-#ifdef DEBUG_TUB
-    Serial.print("HOTTUB->Changing target temp from ");
-    Serial.print(targetState->targetTemperature);
-#endif
 
     int newTargetTemp = command == CMD_BTN_TEMP_UP
                             ? targetState->targetTemperature + 1
@@ -100,9 +95,4 @@ void HotTub::handleTempButtonPress(unsigned int command)
 
     //tubMode = TM_TEMP_MANUAL_CHANGE;
     setTargetTemperature(newTargetTemp);
-
-#ifdef DEBUG_TUB
-    Serial.print(" to ");
-    Serial.println(targetState->targetTemperature);
-#endif
 }

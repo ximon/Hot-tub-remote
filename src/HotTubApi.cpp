@@ -148,9 +148,39 @@ void HotTubApi::handle_maxTemperature()
   setTempMessage(maxTemp, "limit temperature");
 }
 
-void HotTubApi::setTempMessage(int temp, String tempType)
+void HotTubApi::handle_autoRestart()
 {
-  String msg = "Setting " + tempType + " to " + String(temp);
+#ifdef DEBUG_API
+  Serial.println("API->handle_autoRestart()");
+#endif
+
+  if (checkArgument("state"))
+    return;
+
+  bool enable = valueIsTrue("state");
+  hotTub->setAutoRestart(enable);
+
+  String msg = "Auto restart is " + toOnOff(enable);
+  okMessage(msg);
+
+#ifdef DEBUG_API
+  Serial.println(msg);
+#endif
+}
+
+void HotTubApi::handle_temperatureLock()
+{
+#ifdef DEBUG_API
+  Serial.println("API->handle_temperatureLock()");
+#endif
+
+  if (checkArgument("state"))
+    return;
+
+  bool enable = valueIsTrue("state");
+  hotTub->setTemperatureLock(enable);
+
+  String msg = "Temperature lock is " + toOnOff(enable);
   okMessage(msg);
 
 #ifdef DEBUG_API
@@ -199,104 +229,4 @@ void HotTubApi::handle_rawCommand()
     msg = "API->Too many commands in queue!";
   }
   okMessage(msg);
-}
-
-void HotTubApi::handle_autoRestart()
-{
-#ifdef DEBUG_API
-  Serial.println("API->handle_autoRestart()");
-#endif
-
-  if (checkArgument("state"))
-    return;
-
-  bool enable = valueIsTrue("state");
-  hotTub->setAutoRestart(enable);
-
-  String msg = "Auto restart is " + toOnOff(enable);
-  okMessage(msg);
-
-#ifdef DEBUG_API
-  Serial.println(msg);
-#endif
-}
-
-void HotTubApi::handle_temperatureLock()
-{
-#ifdef DEBUG_API
-  Serial.println("API->handle_temperatureLock()");
-#endif
-
-  if (checkArgument("state"))
-    return;
-
-  bool enable = valueIsTrue("state");
-  hotTub->setTemperatureLock(enable);
-
-  String msg = "Temperature lock is " + toOnOff(enable);
-  okMessage(msg);
-
-#ifdef DEBUG_API
-  Serial.println(msg);
-#endif
-}
-
-/*
- * Http Helper functions
- */
-
-void HotTubApi::addCorsHeaders()
-{
-  server->sendHeader("Access-Control-Allow-Origin", "*");
-}
-
-//passes "Done" to be wrapped in a json object
-void HotTubApi::okMessage()
-{
-  okJson(toJson("Done"));
-}
-
-//pass in a message to be wrapped in a json object
-void HotTubApi::okMessage(String message)
-{
-  okJson(toJson(message));
-}
-
-void HotTubApi::okJson(char *json)
-{
-  addCorsHeaders();
-  server->send(200, "application/json", json);
-}
-
-//outputs the json
-void HotTubApi::okJson(String json)
-{
-  addCorsHeaders();
-  server->send(200, "application/json", json);
-}
-
-//outputs the plain text
-void HotTubApi::okText(String message)
-{
-  addCorsHeaders();
-  server->send(200, "text/plain", message);
-}
-
-//sends the error message wrapped in a json object
-void HotTubApi::errorMessage(String message)
-{
-  addCorsHeaders();
-  server->send(400, "application/json", toJson(message));
-}
-
-//wraps the provided message in a json object
-String HotTubApi::toJson(String message)
-{
-  const size_t capacity = JSON_OBJECT_SIZE(5); //todo - 5? what size should this be? variable?
-  StaticJsonDocument<capacity> doc;
-  String json;
-
-  doc["message"] = message;
-  serializeJson(doc, json);
-  return json;
 }

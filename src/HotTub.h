@@ -6,7 +6,9 @@
 #include "Temperatures.h"
 #include "SendReceive.h"
 
-#define INIT_TEMP 37 //Temperature to initially set to when powering up.
+#include "syslog.h"
+
+#define INIT_TEMP 0 //Temperature to initially set to when powering up.
 
 #define WAIT_BETWEEN_SENDING_AUTO_COMMANDS 500
 #define WAIT_BEFORE_INITIAL_TARGET_TEMP_CHECK 5000 //milliseconds after startup to wait before checking the initial target temperature
@@ -14,7 +16,7 @@
 #define DELAY_BETWEEN_PRINTS 1000
 
 #define TEMP_BUTTON_DELAY 2000         //time to wait after a button is pressed to run the target temperature check
-#define TEMP_TARGET_INITIAL_DELAY 6000 //Time to wait before sending a button command to get the target temperature
+#define TEMP_TARGET_INITIAL_DELAY 3000 //Time to wait before sending a button command to get the target temperature
 #define TEMP_CURRENT_DELAY 6000        //Time to wait before taking the reading as the current temperature
 #define TEMP_TARGET_DELAY 250          //Time to wait before taking the reading as the target temperature
 
@@ -48,7 +50,7 @@ struct CurrentState
 
 struct TargetState
 {
-  int pumpState;         //State we want the pump to be in
+  int pumpState;         //The state we want the pump to be in
   int targetTemperature; //Target temperature we want to set the pump to
 };
 
@@ -76,7 +78,9 @@ public:
   int tempValid(int temperature, int minTemp, int maxTemp);
 
   void setTemperatureLock(bool enable); //todo - setting in EEPROM
-  void setAutoRestart(bool enable);     //todo - setting in EEPROM
+
+  void setAutoRestart(bool enable); //todo - setting in EEPROM
+  bool getAutoRestart();
 
   int getErrorCode();
   char *getStateJson();
@@ -85,17 +89,22 @@ public:
   void onCommandReceived(unsigned int command);
 
   void loop();
-  void setup(void (&onStateChange)());
+  void setup(void (&onSetDataInterrupt)(bool state),
+             void (&onStateChange)(char *reason),
+             void (&onDebug)(char *message),
+             void (&onDebugf)(char *fmt, ...));
 
 private:
-  void (*stateChanged)();
+  void (*setDataInterrupt)(bool state);
+  void (*stateChanged)(char *reason);
+  void (*debug)(char *message);
+  void (*debugf)(char *fmt, ...);
 
   CurrentState *currentState;
   TargetState *targetState;
 
   unsigned long tempIgnoreStart = 0; //start time to ignore temperature commands from
 
-  bool manuallyTurnedOff;          //indicates to the autoRestart code that the pump was turned off via the button / command, rather than the 24h timeout
   int limitTemperature = MAX_TEMP; //limits the temperature that can be set to via the control panel
   bool limitTemperatureIsCelsius;
 
@@ -115,14 +124,16 @@ private:
   void handleReceivedStatus(unsigned int command);
   void handleReceivedTemperature(unsigned int command);
   void handleReceivedButton(unsigned int command);
+  void handleTempButtonPress(unsigned int command);
 
   void tempButtonPressed();
   void updateTargetTemperature(int temperature);
   void updateCurrentTemperature(int temperature);
 
-  String stateToString(int pumpState);
-  String errorToString(int errorCode);
-  String buttonToString(int buttonCommand);
+  char *stateToString(int pumpState);
+  char *errorToString(int errorCode);
+  char *buttonToString(int buttonCommand);
+  char *tubModeToString(int tubMode);
 
   void setReceivedTemperature(int temperature);
 

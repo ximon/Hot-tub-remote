@@ -4,15 +4,10 @@ unsigned long flashStartTime;
 
 void HotTub::handleReceivedStatus(unsigned int command)
 {
-#ifdef DEBUG_TUB_VERBOSE
-    Serial.print("HOTTUB->Decoding status command, ");
-#endif
-
     int decodedState = decodeStatus(command);
 
 #ifdef DEBUG_TUB_VERBOSE
-    Serial.print("state is : ");
-    Serial.println(stateToString(currentState->pumpState));
+    debugf("HOTTUB-> Received status command '%s' current state is '%s'", stateToString(decodedState), stateToString(currentState->pumpState));
 #endif
 
     if (decodedState == PUMP_UNKNOWN)
@@ -21,38 +16,43 @@ void HotTub::handleReceivedStatus(unsigned int command)
     //if we dont yet have a target state, just pick up the current state as the target.
     if (targetState->pumpState == PUMP_UNKNOWN)
     {
-        targetState->pumpState = decodedState;
-        stateChanged();
+        if (decodedState == PUMP_HEATER_STANDBY)
+            decodedState = PUMP_HEATING;
+
+        setTargetState(decodedState);
     }
 
     if (currentState->pumpState != decodedState)
     {
+        debugf("HOTTUB->Received new status command '%s', old state was '%s'", stateToString(decodedState), stateToString(currentState->pumpState));
+
         currentState->pumpState = decodedState;
         currentState->errorCode = 0;
-        stateChanged();
+        stateChanged("Current State changed");
     }
 }
 
 void HotTub::handleReceivedError(unsigned int command)
 {
+    //debug("HOTTUB->Decoding error...");
+
     int errorCode = decodeError(command);
 
     if (errorCode == 0)
         return;
 
-    if (currentState->pumpState == PUMP_ERROR)
+    //debugf("HOTTUB->Decoded error, error: '%i'", errorCode);
+
+    if (currentState->pumpState == PUMP_ERROR && currentState->errorCode == errorCode)
         return;
+
+    //#ifdef DEBUG_TUB
+    //debugf("HOTTUB->Error code %d received - %s", currentState->errorCode, errorToString(currentState->errorCode));
+    //#endif
 
     currentState->pumpState = PUMP_ERROR;
     currentState->errorCode = errorCode;
-    stateChanged();
-
-#ifdef DEBUG_TUB
-    Serial.print("HOTTUB->Error code ");
-    Serial.print(currentState->errorCode);
-    Serial.print(" received - ");
-    Serial.println(errorToString(currentState->errorCode));
-#endif
+    stateChanged("Error received");
 }
 
 int HotTub::getErrorCode()
@@ -75,22 +75,24 @@ void HotTub::setTargetState(int newState)
 {
     if (targetState->pumpState != newState)
     {
-#ifdef DEBUG_TUB
-        Serial.print("HOTTUB->Changing state from ");
-        Serial.print(stateToString(targetState->pumpState));
-        Serial.print(" to ");
-        Serial.println(stateToString(newState));
-#endif
+        //#ifdef DEBUG_TUB
+        debugf("HOTTUB->Changing target state from '%s' to '%s'", stateToString(targetState->pumpState), stateToString(newState));
+        //#endif
 
         targetState->pumpState = newState;
-        stateChanged();
+        stateChanged("Target State Changed");
     }
 }
 
 void HotTub::setAutoRestart(bool enable)
 {
     autoRestartEnabled = enable;
-    stateChanged();
+    stateChanged("Auto restart changed");
+}
+
+bool HotTub::getAutoRestart()
+{
+    return autoRestartEnabled;
 }
 
 char *HotTub::getStateJson()
@@ -104,7 +106,7 @@ char *HotTub::getStateJson()
     currentJson["pumpState"] = currentState->pumpState;
     currentJson["temperature"] = currentState->temperature;
     currentJson["targetTemperature"] = currentState->targetTemperature;
-    currentJson["flashing"] = currentState->flashing;
+    currentJson["tubMode"] = tubMode;
 
     TargetState *targetState = getTargetState();
     JsonObject targetJson = doc.createNestedObject("targetState");
@@ -112,6 +114,7 @@ char *HotTub::getStateJson()
     targetJson["targetTemperature"] = targetState->targetTemperature;
 
     doc["autoRestart"] = autoRestartEnabled;
+    doc["autoRestartCount"] = currentState->autoRestartCount;
     doc["limitTemperature"] = getLimitTemperature();
     doc["temperatureLock"] = temperatureLockEnabled;
     doc["errorCode"] = currentState->errorCode;

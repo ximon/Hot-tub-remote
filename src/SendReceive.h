@@ -23,14 +23,8 @@
 #define DATA_START_LEN_MIN DATA_START_LEN - START_TOLERANCE
 #define DATA_START_LEN_MAX DATA_START_LEN + START_TOLERANCE
 
-//Timings in ticks
-#define IN_START_PULSE_TIME 1410   //4540us, 100us after start pulse
-#define IN_DATA_CLOCK_TIME_BTN 106 //340us
-#define DATA_CLOCK_TIME 138        //440us 1 bit time
-
-#define OUT_START_PULSE_TIME 1380 //4440us, start pulse
-#define OUT_START_GAP_TIME 44     //150us
-#define OUT_BUTTON_TIME 137       // 440us
+#define START_PULSE_COUNT 440
+#define START_SPACE_COUNT 18
 
 #define BIT_COUNT 13 //number of bits to read in
 #define DATA_MASK 1 << (BIT_COUNT - 1)
@@ -54,6 +48,7 @@ class SendReceive
 {
 public:
   SendReceive(int dataInPin, int dataOutPin, int debugPin);
+  void setup(void (&onSetDataInterrupt)(bool state), void (&onDebug)(char *message), void (&onDebugf)(char *fmt, ...));
   void loop();
 
   virtual void onCommandReceived(unsigned int command) = 0;
@@ -78,7 +73,9 @@ private:
   int debugPin;
   int debugPinBit;
 
-  void (*setTimer)(int us);
+  void (*setDataInterrupt)(bool state);
+  void (*debug)(char *message);
+  void (*debugf)(char *fmt, ...);
 
   int bitIndex;
   //int bitCount;
