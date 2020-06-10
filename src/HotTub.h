@@ -115,6 +115,7 @@ private:
   void handleReceivedStatus(unsigned int command);
   void handleReceivedTemperature(unsigned int command);
   void handleReceivedButton(unsigned int command);
+  void handleTempButtonPress(unsigned int command);
 
   void tempButtonPressed();
   void updateTargetTemperature(int temperature);
@@ -123,6 +124,7 @@ private:
   String stateToString(int pumpState);
   String errorToString(int errorCode);
   String buttonToString(int buttonCommand);
+  String tubModeToString(int tubMode);
 
   void setReceivedTemperature(int temperature);
 
