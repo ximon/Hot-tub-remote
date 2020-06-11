@@ -17,14 +17,14 @@ void HotTub::handleReceivedStatus(unsigned int command)
     if (targetState->pumpState == PUMP_UNKNOWN)
     {
         targetState->pumpState = decodedState;
-        stateChanged();
+        stateChanged("Setting initial state");
     }
 
     if (currentState->pumpState != decodedState)
     {
         currentState->pumpState = decodedState;
         currentState->errorCode = 0;
-        stateChanged();
+        stateChanged("State changed");
     }
 }
 
@@ -40,7 +40,7 @@ void HotTub::handleReceivedError(unsigned int command)
 
     currentState->pumpState = PUMP_ERROR;
     currentState->errorCode = errorCode;
-    stateChanged();
+    stateChanged("Error received");
 
 #ifdef DEBUG_TUB
     logget->logf("HOTTUB->Error code %i - %s", currentState->errorCode, errorToString(currentState->errorCode));
@@ -72,14 +72,14 @@ void HotTub::setTargetState(int newState)
 #endif
 
         targetState->pumpState = newState;
-        stateChanged();
+        stateChanged("Target state changed");
     }
 }
 
 void HotTub::setAutoRestart(bool enable)
 {
     autoRestartEnabled = enable;
-    stateChanged();
+    stateChanged("Auto-Restart changed");
 }
 
 char *HotTub::getStateJson()

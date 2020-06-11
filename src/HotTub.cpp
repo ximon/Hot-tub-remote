@@ -96,7 +96,7 @@ void HotTub::autoRestartCheck()
 #endif
 
     currentState->autoRestartCount += 1;
-    stateChanged();
+    stateChanged("Auto restarted");
 
     setTargetState(PUMP_HEATING);
   }
@@ -223,7 +223,7 @@ void HotTub::targetStateCheck()
  * Setup and loop
  */
 
-void HotTub::setup(void (&onStateChange)())
+void HotTub::setup(void (&onStateChange)(const char *reason))
 {
   stateChanged = onStateChange;
 }

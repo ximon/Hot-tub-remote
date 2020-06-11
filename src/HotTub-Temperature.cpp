@@ -87,7 +87,7 @@ void HotTub::updateCurrentTemperature(int temperature)
     logger->logf("HOTTUB->Changing current temperature from %i to %i", currentState->temperature, temperature);
 
     currentState->temperature = temperature;
-    stateChanged();
+    stateChanged("Current temperature changed");
 }
 
 void HotTub::updateTargetTemperature(int temperature)
@@ -100,7 +100,7 @@ void HotTub::updateTargetTemperature(int temperature)
     logger->logf("HOTTUB->Changing current target temperature from %i to %i", currentState->targetTemperature, temperature);
 
     currentState->targetTemperature = temperature;
-    stateChanged();
+    stateChanged("Current target temperature changed");
 }
 
 //sets the target state's target temperature
@@ -114,7 +114,7 @@ int HotTub::setTargetTemperature(int temp)
     logger->logf("HOTTUB->Setting target target temperature from %i to %i", targetState->targetTemperature, temp);
 
     targetState->targetTemperature = temp;
-    stateChanged();
+    stateChanged("Target target temperature changed");
 
     return status;
 }
@@ -140,7 +140,7 @@ int HotTub::setLimitTemperature(int temp)
         targetState->targetTemperature = temp;
     }
 
-    stateChanged();
+    stateChanged("Limit temperature changed");
 
     return status;
 }
@@ -148,7 +148,7 @@ int HotTub::setLimitTemperature(int temp)
 void HotTub::setTemperatureLock(bool enable)
 {
     temperatureLockEnabled = enable;
-    stateChanged();
+    stateChanged("Temperature lock changed");
 }
 
 int HotTub::maxTemperatureValid(int maxTemp)

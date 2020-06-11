@@ -89,8 +89,9 @@ void setupSyslog()
 bool OTASetup = false;
 bool sendTestCommand = false;
 
-void onStateChange()
+void onStateChange(const char *reason)
 {
+  logger.logf("State changed - %s", reason);
   hotTubMqtt.sendStatus();
 
   webSocket.broadcastTXT(hotTub.getStateJson());

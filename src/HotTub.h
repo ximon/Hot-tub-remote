@@ -85,10 +85,10 @@ public:
   void onCommandReceived(unsigned int command);
 
   void loop();
-  void setup(void (&onStateChange)());
+  void setup(void (&onStateChange)(const char *reason));
 
 private:
-  void (*stateChanged)();
+  void (*stateChanged)(const char *reason);
 
   Syslog *logger;
 
