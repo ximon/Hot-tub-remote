@@ -62,13 +62,13 @@ void HotTub::onCommandReceived(unsigned int command)
     return;
   }
 
-  if (command >= CMD_ERROR_PKT1 && command <= CMD_END)
+  if (command >= CMD_STATE_ALL_OFF_F && command <= CMD_STATE_BLOWER_ON_C)
   {
     handleReceivedStatus(command);
     return;
   }
 
-  if (command >= CMD_ERROR_5 && command <= CMD_ERROR_1)
+  if ((command >= CMD_ERROR_5 && command <= CMD_ERROR_1) || command == CMD_ERROR_PKT1 || command == CMD_ERROR_PKT2)
   {
     handleReceivedError(command);
     return;
