@@ -83,9 +83,9 @@ void HotTub::updateCurrentTemperature(int temperature)
         return;
     if (currentState->temperature == temperature)
         return;
-#ifdef DEBUG_TUB
-    logger->logf("HOTTUB->Setting current temperature to %i", temperature);
-#endif
+
+    logger->logf("HOTTUB->Changing current temperature from %i to %i", currentState->temperature, temperature);
+
     currentState->temperature = temperature;
     stateChanged();
 }
@@ -96,9 +96,9 @@ void HotTub::updateTargetTemperature(int temperature)
         return;
     if (currentState->targetTemperature == temperature)
         return;
-#ifdef DEBUG_TUB
-    logger->logf("HOTTUB->Setting target temperature to %i", temperature);
-#endif
+
+    logger->logf("HOTTUB->Changing current target temperature from %i to %i", currentState->targetTemperature, temperature);
+
     currentState->targetTemperature = temperature;
     stateChanged();
 }
@@ -111,9 +111,7 @@ int HotTub::setTargetTemperature(int temp)
     if (status != 0)
         return 0;
 
-#ifdef DEBUG_TUB
-    logger->log("HOTTUB->Setting target temperature to %i", temp);
-#endif
+    logger->logf("HOTTUB->Setting target target temperature from %i to %i", targetState->targetTemperature, temp);
 
     targetState->targetTemperature = temp;
     stateChanged();
@@ -133,9 +131,7 @@ int HotTub::setLimitTemperature(int temp)
     if (status != 0)
         return 0;
 
-#ifdef DEBUG_TUB
-    logger->logf("HOTTUB->Setting limit temperature to %i", temp);
-#endif
+    logger->logf("HOTTUB->Changing limit temperature from %i to %i", limitTemperature, temp);
 
     limitTemperature = temp;
 
