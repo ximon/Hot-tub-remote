@@ -183,7 +183,7 @@ int HotTub::decodeError(unsigned int errorCommand)
     }
 }
 
-String HotTub::errorToString(int errorCode)
+const char *HotTub::errorToString(int errorCode)
 {
     switch (errorCode)
     {
@@ -202,7 +202,7 @@ String HotTub::errorToString(int errorCode)
     }
 }
 
-String HotTub::buttonToString(int buttonCommand)
+const char *HotTub::buttonToString(int buttonCommand)
 {
     switch (buttonCommand)
     {
@@ -221,7 +221,7 @@ String HotTub::buttonToString(int buttonCommand)
     }
 }
 
-String HotTub::stateToString(int pumpState)
+const char *HotTub::stateToString(int pumpState)
 {
     switch (pumpState)
     {
@@ -240,7 +240,7 @@ String HotTub::stateToString(int pumpState)
     }
 }
 
-String HotTub::tubModeToString(int tubMode)
+const char *HotTub::tubModeToString(int tubMode)
 {
     switch (tubMode)
     {

@@ -3,9 +3,10 @@
 
 //#define DEBUG_API
 
-HotTubApi::HotTubApi(ESP8266WebServer *webServer, HotTub *hotTubInstance)
+HotTubApi::HotTubApi(ESP8266WebServer *webServer, HotTub *hotTubInstance, Syslog *syslog)
     : server(webServer),
-      hotTub(hotTubInstance)
+      hotTub(hotTubInstance),
+      logger(syslog)
 {
 }
 
@@ -29,7 +30,7 @@ void HotTubApi::setup()
 void HotTubApi::handle_status()
 {
 #ifdef DEBUG_API
-  Serial.println("API->handle_status()");
+  logger->log("API->handle_status()");
 #endif
   char *json = hotTub->getStateJson();
   okJson(json);
@@ -38,7 +39,7 @@ void HotTubApi::handle_status()
 void HotTubApi::handle_pump()
 {
 #ifdef DEBUG_API
-  Serial.println("API->handle_pump()");
+  logger->log("API->handle_pump()");
 #endif
   if (checkArgument("state"))
     return;
@@ -51,14 +52,14 @@ void HotTubApi::handle_pump()
   okMessage(msg);
 
 #ifdef DEBUG_API
-  Serial.println(msg);
+  logger->log(msg);
 #endif
 }
 
 void HotTubApi::handle_heater()
 {
 #ifdef DEBUG_API
-  Serial.println("API->handle_heater()");
+  logger->log("API->handle_heater()");
 #endif
   if (checkArgument("state"))
     return;
@@ -70,14 +71,14 @@ void HotTubApi::handle_heater()
 
   okMessage(msg);
 #ifdef DEBUG_API
-  Serial.println(msg);
+  logger->log(msg);
 #endif
 }
 
 void HotTubApi::handle_blower()
 {
 #ifdef DEBUG_API
-  Serial.println("API->handle_blower()");
+  logger->log("API->handle_blower()");
 #endif
 
   if (checkArgument("state"))
@@ -90,14 +91,14 @@ void HotTubApi::handle_blower()
 
   okMessage(msg);
 #ifdef DEBUG_API
-  Serial.println(msg);
+  logger->log(msg);
 #endif
 }
 
 void HotTubApi::handle_temperature()
 {
 #ifdef DEBUG_API
-  Serial.println("API->handle_temperature()");
+  logger->log("API->handle_temperature()");
 #endif
 
   if (checkArgument("value"))
@@ -124,7 +125,7 @@ void HotTubApi::handle_temperature()
 void HotTubApi::handle_maxTemperature()
 {
 #ifdef DEBUG_API
-  Serial.println("API->handle_maxTemperature()");
+  logger->log("API->handle_maxTemperature()");
 #endif
 
   if (checkArgument("value"))
@@ -154,14 +155,14 @@ void HotTubApi::setTempMessage(int temp, String tempType)
   okMessage(msg);
 
 #ifdef DEBUG_API
-  Serial.println(msg);
+  logger->log(msg);
 #endif
 }
 
 void HotTubApi::handle_rawCommand()
 {
 #ifdef DEBUG_API
-  Serial.println("API->handle_rawCommand()");
+  logger->log("API->handle_rawCommand()");
 #endif
 
   if (checkArgument("command"))
@@ -173,8 +174,7 @@ void HotTubApi::handle_rawCommand()
   unsigned int command = strtol(commandStr.c_str(), 0, 16);
 
 #ifdef DEBUG_API
-  Serial.print("API->command = 0x");
-  Serial.println(command, HEX);
+  logger->logf("API->command = 0x%X", command);
 #endif
 
   if (command == 0)
@@ -204,7 +204,7 @@ void HotTubApi::handle_rawCommand()
 void HotTubApi::handle_autoRestart()
 {
 #ifdef DEBUG_API
-  Serial.println("API->handle_autoRestart()");
+  logger->log("API->handle_autoRestart()");
 #endif
 
   if (checkArgument("state"))
@@ -217,14 +217,14 @@ void HotTubApi::handle_autoRestart()
   okMessage(msg);
 
 #ifdef DEBUG_API
-  Serial.println(msg);
+  logger->log(msg);
 #endif
 }
 
 void HotTubApi::handle_temperatureLock()
 {
 #ifdef DEBUG_API
-  Serial.println("API->handle_temperatureLock()");
+  logger->log("API->handle_temperatureLock()");
 #endif
 
   if (checkArgument("state"))
@@ -237,7 +237,7 @@ void HotTubApi::handle_temperatureLock()
   okMessage(msg);
 
 #ifdef DEBUG_API
-  Serial.println(msg);
+  logger->log(msg);
 #endif
 }
 

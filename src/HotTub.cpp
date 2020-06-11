@@ -3,12 +3,13 @@
 #include "Temperatures.h"
 #include "SendReceive.h"
 
-//todo - extract Serial.print lines to a debug function that can be handled externally.
+#include <SysLog.h>
 
 #define DEBUG_TUB
 
-HotTub::HotTub(int dataInPin, int dataOutPin, int debugPin)
-    : SendReceive(dataInPin, dataOutPin, debugPin)
+HotTub::HotTub(int dataInPin, int dataOutPin, int debugPin, Syslog *syslog)
+    : SendReceive(dataInPin, dataOutPin, debugPin, syslog),
+      logger(syslog)
 {
   currentState = new CurrentState();
   currentState->pumpState = PUMP_UNKNOWN;
@@ -21,13 +22,13 @@ HotTub::HotTub(int dataInPin, int dataOutPin, int debugPin)
 void HotTub::onCommandSent(unsigned int command)
 {
 #ifdef DEBUG_TUB
-//  Serial.println("HOTTUB->Command Sent!");
+  logger->log("HOTTUB->Command Sent!");
 #endif
 
   if (command == CMD_BTN_TEMP_UP || command == CMD_BTN_TEMP_DN)
   {
 #ifdef DEBUG_TUB
-    Serial.println("HOTTUB->Next temperature reading will be for the target temperature");
+    logger->log("HOTTUB->Next temperature reading will be for the target temperature");
 #endif
     tempButtonPressed();
   }
@@ -36,14 +37,13 @@ void HotTub::onCommandSent(unsigned int command)
 void HotTub::onCommandReceived(unsigned int command)
 {
 #ifdef DEBUG_TUB_VERBOSE
-  Serial.print("HOTTUB->Handling command 0x");
-  Serial.println(command, HEX);
+  logger->logf("HOTTUB->Handling command 0x%X", command);
 #endif
 
   if (command == 0)
   {
 #ifdef DEBUG_TUB
-    Serial.print("HOTTUB->Invalid command received");
+    logger->log("HOTTUB->Invalid command received");
 #endif
     return;
   }
@@ -92,7 +92,7 @@ void HotTub::autoRestartCheck()
   if (currentState->pumpState == PUMP_OFF && targetState->pumpState != PUMP_HEATING)
   {
 #ifdef DEBUG_TUB
-    Serial.println("HOTTUB->Auto restarting...");
+    logger->log("HOTTUB->Auto restarting...");
 #endif
 
     currentState->autoRestartCount += 1;
@@ -111,7 +111,7 @@ void HotTub::targetTemperatureCheck()
   if (currentState->targetTemperature == 0 && millis() > TEMP_TARGET_INITIAL_DELAY)
   {
 #ifdef DEBUG_TUB
-    Serial.print("HOTTUB->Getting current target temperature...");
+    logger->log("HOTTUB->Getting current target temperature...");
 #endif
     queueCommand(CMD_BTN_TEMP_DN); //send a temp down command to get the display to flash the target temp
     lastButtonPressTime = millis();
@@ -136,7 +136,7 @@ void HotTub::adjustTemperatures()
   if (currentState->targetTemperature < targetState->targetTemperature)
   {
 #ifdef DEBUG_TUB
-    Serial.println("HOTTUB->Auto-Adjusting target temperature, up");
+    logger->log("HOTTUB->Auto-Adjusting target temperature, up");
 #endif
     int commandsToSend = targetState->targetTemperature - currentState->targetTemperature;
 
@@ -148,7 +148,7 @@ void HotTub::adjustTemperatures()
   if (currentState->targetTemperature > targetState->targetTemperature)
   {
 #ifdef DEBUG_TUB
-    Serial.println("HOTTUB->Auto-Adjusting target temperature, down");
+    logger->log("HOTTUB->Auto-Adjusting target temperature, down");
 #endif
     int commandsToSend = currentState->targetTemperature - targetState->targetTemperature;
 
@@ -240,7 +240,7 @@ void HotTub::loop()
     {
       lastPrintTime = millis();
 #ifdef DEBUG_TUB
-      Serial.println("HOTTUB->Waiting for auto send delay");
+      logger->log("HOTTUB->Waiting for auto send delay");
 #endif
     }
     return;
@@ -253,7 +253,7 @@ void HotTub::loop()
     {
       lastPrintTime = millis();
 #ifdef DEBUG_TUB
-      Serial.println("HOTTUB->Command queue maxed out!");
+      logger->log("HOTTUB->Command queue maxed out!");
 #endif
     }
     return;

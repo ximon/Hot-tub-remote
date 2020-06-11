@@ -6,6 +6,8 @@
 #include "Temperatures.h"
 #include "SendReceive.h"
 
+#include <Syslog.h>
+
 #define INIT_TEMP 37 //Temperature to initially set to when powering up.
 
 #define WAIT_BETWEEN_SENDING_AUTO_COMMANDS 500
@@ -20,8 +22,6 @@
 
 #define TEMP_ADJUST_DELAY 3000 //must be less than TEMP_IGNORE_TIME!!
 #define BUTTON_SEND_DELAY 1000 //time to wait before sending buttons to change state
-
-//todo - extract Serial.print lines to a debug function that can be handled externally.
 
 #define PUMP_UNKNOWN -1 //haven't received a status command yet
 #define PUMP_OFF 0
@@ -61,7 +61,7 @@ struct TargetState
 class HotTub : public SendReceive
 {
 public:
-  HotTub(int dataInPin, int dataOutPin, int debugPin);
+  HotTub(int dataInPin, int dataOutPin, int debugPin, Syslog *syslog);
 
   CurrentState *getCurrentState();
   TargetState *getTargetState();
@@ -89,6 +89,8 @@ public:
 
 private:
   void (*stateChanged)();
+
+  Syslog *logger;
 
   CurrentState *currentState;
   TargetState *targetState;
@@ -121,10 +123,10 @@ private:
   void updateTargetTemperature(int temperature);
   void updateCurrentTemperature(int temperature);
 
-  String stateToString(int pumpState);
-  String errorToString(int errorCode);
-  String buttonToString(int buttonCommand);
-  String tubModeToString(int tubMode);
+  const char *stateToString(int pumpState);
+  const char *errorToString(int errorCode);
+  const char *buttonToString(int buttonCommand);
+  const char *tubModeToString(int tubMode);
 
   void setReceivedTemperature(int temperature);
 

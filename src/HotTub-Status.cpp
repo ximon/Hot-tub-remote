@@ -4,15 +4,10 @@ unsigned long flashStartTime;
 
 void HotTub::handleReceivedStatus(unsigned int command)
 {
-#ifdef DEBUG_TUB_VERBOSE
-    Serial.print("HOTTUB->Decoding status command, ");
-#endif
-
     int decodedState = decodeStatus(command);
 
 #ifdef DEBUG_TUB_VERBOSE
-    Serial.print("state is : ");
-    Serial.println(stateToString(currentState->pumpState));
+    logger->logf("HOTTUB->Decoding status command, state is %s", stateToString(currentState->pumpState));
 #endif
 
     if (decodedState == PUMP_UNKNOWN)
@@ -48,10 +43,7 @@ void HotTub::handleReceivedError(unsigned int command)
     stateChanged();
 
 #ifdef DEBUG_TUB
-    Serial.print("HOTTUB->Error code ");
-    Serial.print(currentState->errorCode);
-    Serial.print(" received - ");
-    Serial.println(errorToString(currentState->errorCode));
+    logget->logf("HOTTUB->Error code %i - %s", currentState->errorCode, errorToString(currentState->errorCode));
 #endif
 }
 
@@ -76,10 +68,7 @@ void HotTub::setTargetState(int newState)
     if (targetState->pumpState != newState)
     {
 #ifdef DEBUG_TUB
-        Serial.print("HOTTUB->Changing state from ");
-        Serial.print(stateToString(targetState->pumpState));
-        Serial.print(" to ");
-        Serial.println(stateToString(newState));
+        logger->logf("HOTTUB->Changing state from %s to %s", stateToString(targetState->pumpState), stateToString(newState));
 #endif
 
         targetState->pumpState = newState;

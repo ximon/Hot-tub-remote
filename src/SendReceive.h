@@ -3,6 +3,8 @@
 
 #include <Arduino.h>
 
+#include <Syslog.h>
+
 #define ALLOW_SEND_WITHOUT_RECEIVE true  //enable this to allow sending commands without having first received any
 #define IGNORE_INVALID_START_PULSE false //enable this to allow testing without a valid start pulse
 
@@ -53,7 +55,7 @@
 class SendReceive
 {
 public:
-  SendReceive(int dataInPin, int dataOutPin, int debugPin);
+  SendReceive(int dataInPin, int dataOutPin, int debugPin, Syslog *syslog);
   void loop();
 
   virtual void onCommandReceived(unsigned int command) = 0;
@@ -79,6 +81,7 @@ private:
   int debugPinBit;
 
   void (*setTimer)(int us);
+  Syslog *logger;
 
   int bitIndex;
   //int bitCount;

@@ -33,6 +33,8 @@
 #include "HotTubMqtt.h"
 #include "Pins.h"
 
+#include <syslog.h>
+
 // -- Initial name of the Thing. Used e.g. as SSID of the own Access Point.
 const char thingName[] = "HotTubRemote";
 // -- Initial password to connect to the Thing, when it creates an own Access Point.
@@ -60,9 +62,29 @@ IotWebConfParameter mqttPortParam = IotWebConfParameter("Port", "mqttPort", mqtt
 IotWebConfParameter mqttUserParam = IotWebConfParameter("User", "mqttUser", mqttUser, STRING_LEN);
 IotWebConfParameter mqttPassParam = IotWebConfParameter("Password", "mqttPass", mqttPass, STRING_LEN);
 
-HotTub hotTub(DATA_IN, DATA_ENABLE, DBG);
-HotTubApi hotTubApi(&server, &hotTub);
-HotTubMqtt hotTubMqtt(&hotTub);
+// Syslog server connection info
+#define SYSLOG_SERVER "255.255.255.255" //broadcast
+#define SYSLOG_PORT 514
+
+// This device info
+#define DEVICE_HOSTNAME "HotTubRemote"
+#define APP_NAME "-"
+WiFiUDP udpClient;
+Syslog logger(udpClient, SYSLOG_PROTO_IETF);
+
+HotTub hotTub(DATA_IN, DATA_ENABLE, DBG, &logger);
+HotTubApi hotTubApi(&server, &hotTub, &logger);
+HotTubMqtt hotTubMqtt(&hotTub, &logger);
+
+bool justStarted = true;
+
+void setupSyslog()
+{
+  logger.server(SYSLOG_SERVER, SYSLOG_PORT);
+  logger.deviceHostname(DEVICE_HOSTNAME);
+  logger.appName(APP_NAME);
+  logger.defaultPriority(LOG_INFO);
+}
 
 bool OTASetup = false;
 bool sendTestCommand = false;
@@ -100,17 +122,17 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
 {
   if (type == WStype_DISCONNECTED)
   {
-    Serial.printf("[%u] Disconnected!\n", num);
+    logger.logf("[%u] Disconnected!\n", num);
   }
   else if (type == WStype_CONNECTED)
   {
     IPAddress ip = webSocket.remoteIP(num);
-    Serial.printf("[%u] Connected from %d.%d.%d.%d url: %s\n", num, ip[0], ip[1], ip[2], ip[3], payload);
+    logger.logf("[%u] Connected from %d.%d.%d.%d url: %s\n", num, ip[0], ip[1], ip[2], ip[3], payload);
     webSocket.sendTXT(num, hotTub.getStateJson());
   }
   else if (type == WStype_TEXT)
   {
-    Serial.printf("[%u] get Text: %s\n", num, payload);
+    logger.logf("[%u] get Text: %s\n", num, payload);
     webSocket.sendTXT(num, "Received!");
   }
 }
@@ -138,48 +160,76 @@ void setupMqtt()
     hotTubMqtt.setCredentials(&mqttUser[0], &mqttPass[0]);
 }
 
+const char *otaErrorToString(ota_error_t error)
+{
+  switch (error)
+  {
+  case OTA_AUTH_ERROR:
+    return "Auth Failed";
+  case OTA_BEGIN_ERROR:
+    return "Begin Failed";
+  case OTA_CONNECT_ERROR:
+    return "Connect Failed";
+  case OTA_RECEIVE_ERROR:
+    return "Receive Failed";
+  case OTA_END_ERROR:
+    return "End Failed";
+  }
+}
+
 void setupOTA()
 {
   ArduinoOTA.setHostname(HOSTNAME);
   ArduinoOTA.onStart([]() {
-    String type;
-    if (ArduinoOTA.getCommand() == U_FLASH)
-    {
-      type = "sketch";
-    }
-    else
-    { // U_FS
-      type = "filesystem";
-    }
-
+    const char *type = ArduinoOTA.getCommand() == U_FLASH ? "sketch" : "filesystem";
     // NOTE: if updating FS this would be the place to unmount FS using FS.end()
-    Serial.println("Start updating " + type);
+    logger.logf("Start updating %s", type);
   });
-  ArduinoOTA.onEnd([]() { Serial.println("\nEnd"); });
+  ArduinoOTA.onEnd([]() { logger.logf("\nEnd"); });
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+    logger.logf("Progress: %u%%\r", (progress / (total / 100)));
   });
   ArduinoOTA.onError([](ota_error_t error) {
-    Serial.printf("Error[%u]: ", error);
-    if (error == OTA_AUTH_ERROR)
-      Serial.println("Auth Failed");
-    else if (error == OTA_BEGIN_ERROR)
-      Serial.println("Begin Failed");
-    else if (error == OTA_CONNECT_ERROR)
-      Serial.println("Connect Failed");
-    else if (error == OTA_RECEIVE_ERROR)
-      Serial.println("Receive Failed");
-    else if (error == OTA_END_ERROR)
-      Serial.println("End Failed");
+    logger.logf("Error[%u]: ", otaErrorToString(error));
   });
   ArduinoOTA.begin();
 
-  Serial.println("OTA Setup complete.");
+  logger.log("OTA Setup complete.");
+}
+
+void sendConnected()
+{
+  logger.log("HotTubRemote Connected");
+}
+
+void sendStartInfo()
+{
+  justStarted = false;
+  logger.log("##############################");
+  logger.log("##     HOTTUB  STARTED      ##");
+  logger.log("##############################");
+  logger.logf("Uptime: %is", millis() / 1000);
+
+  struct rst_info *rst = system_get_rst_info();
+  const char *reasons[] = {"Normal Startup", "Hardware WDT", "Exception", "Software WDT", "Soft Restart", "Deep Sleep Awake", "External System Reset"};
+
+  logger.logf("Restart Reason: %s (%i)", reasons[rst->reason], rst->reason);
+
+  if (rst->exccause > 0)
+  {
+    logger.logf("excCause: %i, excVaddr: %i, epc1: %i, epc2: %i, epc3: %i, depc: %i", rst->exccause, rst->excvaddr, rst->epc1, rst->epc2, rst->epc3, rst->depc);
+  }
 }
 
 void wifiConnected()
 {
+  setupSyslog();
   setupOTA();
+
+  if (justStarted)
+    sendStartInfo();
+
+  sendConnected();
 
   if (strlen(mqttServer) > 0)
     setupMqtt();
@@ -213,7 +263,7 @@ void setupWebServer()
   server.on("/config", [] { iotWebConf.handleConfig(); });
   server.onNotFound(handleNotFound);
   server.begin();
-  Serial.println("HTTP server started.");
+  logger.log("HTTP server started.");
 }
 
 void setupWebSocket()
@@ -235,9 +285,6 @@ void enableInterrupts()
 void setup(void)
 {
   Serial.begin(115200);
-  Serial.println();
-  Serial.println();
-  Serial.println("Starting HotTub Remote...");
 
   setupBoard();
   setupIotWebConf();

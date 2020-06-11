@@ -67,9 +67,7 @@ void HotTub::handleReceivedTemperature(unsigned int command)
     updateCurrentTemperature(newTemp);
 
 #ifdef DEBUG_TUB_VERBOSE
-    Serial.print("HOTTUB->Decoding temperature command, ");
-    Serial.print("received ");
-    Serial.println(temperature);
+    logget->logf("HOTTUB->Decoding temperature command, received %i", temperature);
 #endif
 }
 
@@ -86,8 +84,7 @@ void HotTub::updateCurrentTemperature(int temperature)
     if (currentState->temperature == temperature)
         return;
 #ifdef DEBUG_TUB
-    Serial.print("HOTTUB->Setting current temperature to ");
-    Serial.println(temperature);
+    logger->logf("HOTTUB->Setting current temperature to %i", temperature);
 #endif
     currentState->temperature = temperature;
     stateChanged();
@@ -100,8 +97,7 @@ void HotTub::updateTargetTemperature(int temperature)
     if (currentState->targetTemperature == temperature)
         return;
 #ifdef DEBUG_TUB
-    Serial.print("HOTTUB->Setting target temperature to ");
-    Serial.println(temperature);
+    logger->logf("HOTTUB->Setting target temperature to %i", temperature);
 #endif
     currentState->targetTemperature = temperature;
     stateChanged();
@@ -116,8 +112,7 @@ int HotTub::setTargetTemperature(int temp)
         return 0;
 
 #ifdef DEBUG_TUB
-    Serial.print("HOTTUB->Setting target temperature to ");
-    Serial.println(temp);
+    logger->log("HOTTUB->Setting target temperature to %i", temp);
 #endif
 
     targetState->targetTemperature = temp;
@@ -139,8 +134,7 @@ int HotTub::setLimitTemperature(int temp)
         return 0;
 
 #ifdef DEBUG_TUB
-    Serial.print("HOTTUB->Setting limit temperature to ");
-    Serial.println(temp);
+    logger->logf("HOTTUB->Setting limit temperature to %i", temp);
 #endif
 
     limitTemperature = temp;

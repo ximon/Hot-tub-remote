@@ -3,8 +3,9 @@
 
 #define DEBUG_MQTT
 
-HotTubMqtt::HotTubMqtt(HotTub *hotTubInstance)
-    : hotTub(hotTubInstance)
+HotTubMqtt::HotTubMqtt(HotTub *hotTubInstance, Syslog *syslog)
+    : hotTub(hotTubInstance),
+      logger(syslog)
 {
 }
 
@@ -49,10 +50,7 @@ void HotTubMqtt::callback(char *topic, byte *payload, unsigned int length)
   message[length] = '\0';
 
 #ifdef DEBUG_MQTT
-  Serial.print("MQTT->");
-  Serial.print(topic);
-  Serial.print("->");
-  Serial.println(message);
+  logger->logf("MQTT->%s->%s", topic, message);
 #endif
 
   if (strcmp(topic, "hottub/cmnd/pump") == 0 ||
@@ -62,7 +60,7 @@ void HotTubMqtt::callback(char *topic, byte *payload, unsigned int length)
       strcmp(topic, "hottub/cmnd/autorestart") == 0)
   {
 #ifdef DEBUG_MQTT
-    Serial.println("MQTT->Handling state message");
+    logger->log("MQTT->Handling state message");
 #endif
 
     handleStateMessages(topic, message, length);
@@ -73,7 +71,7 @@ void HotTubMqtt::callback(char *topic, byte *payload, unsigned int length)
       strcmp(topic, "hottub/cmnd/temperature/max") == 0)
   {
 #ifdef DEBUG_MQTT
-    Serial.print("MQTT->Handing value message");
+    logger->log("MQTT->Handing value message");
 #endif
 
     handleValueMessages(topic, message, length);
@@ -83,7 +81,7 @@ void HotTubMqtt::callback(char *topic, byte *payload, unsigned int length)
   if (strcmp(topic, "hottub/cmnd/command") == 0)
   {
 #ifdef DEBUG_MQTT
-    Serial.println("MQTT->Handing raw command");
+    logger->log("MQTT->Handing raw command");
 #endif
 
     handleRawCommand(message);
@@ -158,7 +156,7 @@ void HotTubMqtt::handleValueMessages(char *topic, char *message, unsigned int le
   }
 }
 
-unsigned int validateCommand(char *message)
+unsigned int HotTubMqtt::validateCommand(char *message)
 {
   const size_t capacity = JSON_OBJECT_SIZE(1) + 20;
   DynamicJsonDocument doc(capacity);
@@ -183,7 +181,7 @@ unsigned int validateCommand(char *message)
   if (command == 0)
   {
 #ifdef DEBUG_MQTT
-    Serial.println("MQTT->Commands must be in the format 0x1234");
+    logger->log("MQTT->Commands must be in the format 0x1234");
 #endif
     return 0;
   }
@@ -191,7 +189,7 @@ unsigned int validateCommand(char *message)
   if (command >= 0x4000)
   {
 #ifdef DEBUG_MQTT
-    Serial.println("MQTT->Commands must be less than 0x4000");
+    logger->log("MQTT->Commands must be less than 0x4000");
 #endif
     return 0;
   }
@@ -209,14 +207,13 @@ void HotTubMqtt::handleRawCommand(char *message)
   if (hotTub->queueCommand(command))
   {
 #ifdef DEBUG_MQTT
-    Serial.print("MQTT->Sending command 0x");
-    Serial.println(command, HEX);
+    logger->logf("MQTT->Sending command 0x%X", command);
 #endif
     return;
   }
 
 #ifdef DEBUG_MQTT
-  Serial.println("MQTT->Too many commands in queue!");
+  logger->logf("MQTT->Too many commands in queue!");
 #endif
 }
 
@@ -226,7 +223,7 @@ void HotTubMqtt::sendStatus()
     return;
 
 #ifdef DEBUG_MQTT
-  Serial.println("MQTT->Sending status json...");
+  logger->log("MQTT->Sending status json...");
 #endif
 
   publish("hottub/state/status", hotTub->getStateJson());
@@ -267,6 +264,35 @@ bool HotTubMqtt::connect()
   return client.connect(clientId.c_str());
 }
 
+const char *mqttStateToString(int state)
+{
+  switch (state)
+  {
+  case -4:
+    return "MQTT_CONNECTION_TIMEOUT";
+  case -3:
+    return "MQTT_CONNECTION_LOST";
+  case -2:
+    return "MQTT_CONNECT_FAILED";
+  case -1:
+    return "MQTT_DISCONNECTED";
+  case 0:
+    return "MQTT_CONNECTED";
+  case 1:
+    return "MQTT_CONNECT_BAD_PROTOCOL";
+  case 2:
+    return "MQTT_CONNECT_BAD_CLIENT_ID";
+  case 3:
+    return "MQTT_CONNECT_UNAVAILABLE";
+  case 4:
+    return "MQTT_CONNECT_BAD_CREDENTIALS";
+  case 5:
+    return "MQTT_CONNECT_UNAUTHORIZED";
+  default:
+    return "UNKNOWN";
+  }
+}
+
 unsigned long lastConnectAttempt = 0;
 void HotTubMqtt::reconnect()
 {
@@ -278,13 +304,13 @@ void HotTubMqtt::reconnect()
   if (!client.connected())
   {
 #ifdef DEBUG_MQTT
-    Serial.print("MQTT->Connecting...");
+    logger->log("MQTT->Connecting...");
 #endif
 
     if (connect())
     {
 #ifdef DEBUG_MQTT
-      Serial.println("connected");
+      logger->log("connected");
 #endif
 
       subscribe();
@@ -294,43 +320,7 @@ void HotTubMqtt::reconnect()
     }
 
 #ifdef DEBUG_MQTT
-    Serial.print("failed, state = ");
-
-    switch (client.state())
-    {
-    case -4:
-      Serial.print("MQTT_CONNECTION_TIMEOUT");
-      break;
-    case -3:
-      Serial.print("MQTT_CONNECTION_LOST");
-      break;
-    case -2:
-      Serial.print("MQTT_CONNECT_FAILED");
-      break;
-    case -1:
-      Serial.print("MQTT_DISCONNECTED");
-      break;
-    case 0:
-      Serial.print("MQTT_CONNECTED");
-      break;
-    case 1:
-      Serial.print("MQTT_CONNECT_BAD_PROTOCOL");
-      break;
-    case 2:
-      Serial.print("MQTT_CONNECT_BAD_CLIENT_ID");
-      break;
-    case 3:
-      Serial.print("MQTT_CONNECT_UNAVAILABLE");
-      break;
-    case 4:
-      Serial.print("MQTT_CONNECT_BAD_CREDENTIALS");
-      break;
-    case 5:
-      Serial.print("MQTT_CONNECT_UNAUTHORIZED");
-      break;
-    }
-
-    Serial.println(" try again in 5 seconds");
+    logger->logf("failed, state = %s, try again in 5 seconds", mqttStateToString(client.state()));
 #endif
   }
 }

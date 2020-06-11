@@ -14,7 +14,7 @@ void HotTubApi::valueNotProvided(String argumentName)
     String output = "No " + argumentName + " provided";
     errorMessage(output);
 #ifdef DEBUG_API
-    Serial.println(output);
+    logger->log(output);
 #endif
 }
 

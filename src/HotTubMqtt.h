@@ -6,10 +6,12 @@
 #include "PubSubClient.h"
 #include <ESP8266WiFi.h>
 
+#include <Syslog.h>
+
 class HotTubMqtt
 {
 public:
-  HotTubMqtt(HotTub *hotTubInstance);
+  HotTubMqtt(HotTub *hotTubInstance, Syslog *syslog);
 
   void callback(char *topic, byte *payload, unsigned int length);
 
@@ -24,6 +26,8 @@ private:
   HotTub *hotTub;
   WiFiClient espClient;
   PubSubClient client;
+
+  Syslog *logger;
 
   void reconnect();
   void subscribe();
@@ -41,6 +45,8 @@ private:
   void handleStateMessages(char *topic, char *message, unsigned int length);
   void handleValueMessages(char *topic, char *message, unsigned int length);
   void handleRawCommand(char *message);
+
+  unsigned int validateCommand(char *message);
 };
 
 #endif

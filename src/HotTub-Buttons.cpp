@@ -5,9 +5,7 @@
 void HotTub::handleReceivedButton(unsigned int command)
 {
 #ifdef DEBUG_TUB
-    Serial.print("HOTTUB->Decoding button command,");
-    Serial.print(buttonToString(command));
-    Serial.println(" button was pressed");
+    logger->logf("HOTTUB->Decoding button command, %s was pressed", buttonToString(command));
 #endif
 
     switch (command)
@@ -67,23 +65,17 @@ void HotTub::handleTempButtonPress(unsigned int command)
     //if its not flashing then the temperature won't change
     if (tubMode != TM_FLASHING && tubMode != TM_FLASH_DETECTED)
     {
-        Serial.print("HOTTUB->Ignoring, TubMode was ");
-        Serial.println(tubModeToString(tubMode));
+        logger->logf("HOTTUB->Ignoring, TubMode was %s", tubModeToString(tubMode));
         return;
     }
 
     if (temperatureLockEnabled)
     {
 #ifdef DEBUG_TUB
-        Serial.println("HOTTUB->Temperature is locked, keeping current target temperature");
+        logger->log("HOTTUB->Temperature is locked, keeping current target temperature");
 #endif
         return;
     }
-
-#ifdef DEBUG_TUB
-    Serial.print("HOTTUB->Changing target temp from ");
-    Serial.print(targetState->targetTemperature);
-#endif
 
     int newTargetTemp = command == CMD_BTN_TEMP_UP
                             ? targetState->targetTemperature + 1
@@ -98,11 +90,9 @@ void HotTub::handleTempButtonPress(unsigned int command)
     if (newTargetTemp < MIN_TEMP)
         newTargetTemp = MIN_TEMP;
 
+#ifdef DEBUG_TUB
+    logger->logf("HOTTUB->Changing target temp from %i to %i", targetState->targetTemperature, newTargetTemp);
+#endif
     //tubMode = TM_TEMP_MANUAL_CHANGE;
     setTargetTemperature(newTargetTemp);
-
-#ifdef DEBUG_TUB
-    Serial.print(" to ");
-    Serial.println(targetState->targetTemperature);
-#endif
 }
