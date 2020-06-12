@@ -18,6 +18,25 @@ void HotTub::handleReceivedStatus(unsigned int command)
     {
         targetState->pumpState = decodedState;
         stateChanged("Setting initial state");
+        return;
+    }
+
+    //we receive a CMD_END when the pump has been running 24Hrs
+    //todo - might need a delay to prevent ERROR 1
+    if (command == CMD_END)
+    {
+        if (autoRestartEnabled)
+        {
+            logger->log("HOTTUB->Received CMD_END, ignoring (AutoRestart enabled)");
+        }
+        else
+        {
+            logger->log("HOTTUB->Received CMD_END, turning pump off (AutoRestart disabled)");
+            currentState = PUMP_OFF;
+            stateChanged("Pump Turned off - 24hr timeout");
+        }
+
+        return;
     }
 
     if (currentState->pumpState != decodedState)

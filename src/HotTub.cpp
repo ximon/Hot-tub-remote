@@ -62,7 +62,7 @@ void HotTub::onCommandReceived(unsigned int command)
     return;
   }
 
-  if (command >= CMD_STATE_ALL_OFF_F && command <= CMD_STATE_BLOWER_ON_C)
+  if ((command >= CMD_STATE_ALL_OFF_F && command <= CMD_STATE_BLOWER_ON_C) || command == CMD_END)
   {
     handleReceivedStatus(command);
     return;
@@ -72,33 +72,6 @@ void HotTub::onCommandReceived(unsigned int command)
   {
     handleReceivedError(command);
     return;
-  }
-}
-
-/*
- * Target state checks
- */
-
-void HotTub::autoRestartCheck()
-{
-  if (!autoRestartEnabled)
-    return;
-
-  if (manuallyTurnedOff)
-    return;
-
-  //todo - i thought we found a PUMP_END state???
-  //todo - why has the target state changed ??
-  if (currentState->pumpState == PUMP_OFF && targetState->pumpState != PUMP_HEATING)
-  {
-#ifdef DEBUG_TUB
-    logger->log("HOTTUB->Auto restarting...");
-#endif
-
-    currentState->autoRestartCount += 1;
-    stateChanged("Auto restarted");
-
-    setTargetState(PUMP_HEATING);
   }
 }
 
@@ -259,7 +232,6 @@ void HotTub::loop()
     return;
   }
 
-  autoRestartCheck();
   targetTemperatureCheck();
   targetStateCheck();
 }
