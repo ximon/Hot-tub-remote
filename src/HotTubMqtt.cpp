@@ -1,5 +1,6 @@
 #include "HotTubMqtt.h"
 #include "PubSubClient.h"
+#include "State.h"
 
 #define DEBUG_MQTT
 
@@ -68,7 +69,8 @@ void HotTubMqtt::callback(char *topic, byte *payload, unsigned int length)
   }
 
   if (strcmp(topic, "hottub/cmnd/temperature/target") == 0 ||
-      strcmp(topic, "hottub/cmnd/temperature/max") == 0)
+      strcmp(topic, "hottub/cmnd/temperature/max") == 0 ||
+      strcmp(topic, "hottub/cmnd/targetState") == 0)
   {
 #ifdef DEBUG_MQTT
     logger->log("MQTT->Handing value message");
@@ -137,11 +139,25 @@ void HotTubMqtt::handleStateMessages(char *topic, char *message, unsigned int le
 
 void HotTubMqtt::handleValueMessages(char *topic, char *message, unsigned int length)
 {
-  const size_t capacity = JSON_OBJECT_SIZE(1) + 20;
-  DynamicJsonDocument doc(capacity);
-  deserializeJson(doc, message);
+  int value;
 
-  int value = doc["value"];
+  if (isDigit(message[0]))
+  {
+    value = atoi(message);
+  }
+  else
+  {
+    const size_t capacity = JSON_OBJECT_SIZE(1) + 20;
+    DynamicJsonDocument doc(capacity);
+    deserializeJson(doc, message);
+    value = doc["value"];
+  }
+
+  if (strcmp(topic, "hottub/cmnd/targetState") == 0)
+  {
+    hotTub->setTargetState(value);
+    return;
+  }
 
   if (strcmp(topic, "hottub/cmnd/temperature/target") == 0)
   {
@@ -227,6 +243,15 @@ void HotTubMqtt::sendStatus()
 #endif
 
   publish("hottub/state/status", hotTub->getStateJson());
+
+  CurrentState *currentState = hotTub->getCurrentState();
+  TargetState *targetState = hotTub->getTargetState();
+
+  publish("hottub/state/temperature/current", currentState->temperature);
+  publish("hottub/state/temperature/target", targetState->targetTemperature);
+  publish("hottub/state/currentState", currentState->pumpState);
+  publish("hottub/state/targetState", targetState->pumpState);
+  publish("hottub/state/errorcode", currentState->errorCode);
 }
 
 void HotTubMqtt::sendConnected()
@@ -242,8 +267,16 @@ void HotTubMqtt::publish(const char *topic, char *payload)
   client.publish_P(topic, (const uint8_t *)payload, strnlen(payload, 512), false);
 }
 
+void HotTubMqtt::publish(const char *topic, int payload)
+{
+  char buffer[2];
+  itoa(payload, buffer, 10);
+  client.publish_P(topic, (const uint8_t *)buffer, strnlen(buffer, 512), false);
+}
+
 void HotTubMqtt::subscribe()
 {
+  client.subscribe("hottub/cmnd/targetState");
   client.subscribe("hottub/cmnd/pump");
   client.subscribe("hottub/cmnd/heater");
   client.subscribe("hottub/cmnd/blower");

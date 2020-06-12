@@ -34,6 +34,7 @@ private:
   bool connect();
   void sendConnected();
   void publish(const char *topic, char *payload);
+  void publish(const char *topic, int payload);
 
   char *mqttServer;
   int mqttPort;
