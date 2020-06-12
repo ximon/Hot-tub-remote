@@ -99,7 +99,10 @@ void HotTub::targetTemperatureCheck()
     return;
 
   if (tubMode != TM_NORMAL)
+  {
+    logger->logf("HOTTUB->Not changing temperature, TubMode is %s", tubModeToString(tubMode));
     return;
+  }
 
   adjustTemperatures();
 }
