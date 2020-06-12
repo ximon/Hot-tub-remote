@@ -66,20 +66,29 @@ void HotTub::handleReceivedError(unsigned int command)
 #endif
 }
 
-int HotTub::getErrorCode()
-{
-    return currentState->errorCode;
-}
-
-//todo - change this to return a copy of the array as we don't want external code changing its state!
 CurrentState *HotTub::getCurrentState()
 {
-    return currentState;
+    CurrentState *state = new CurrentState();
+
+    state->autoRestartCount = currentState->autoRestartCount;
+    state->errorCode = currentState->errorCode;
+    state->flashing = currentState->flashing;
+    state->pumpState = currentState->pumpState;
+    state->targetTemperature = currentState->targetTemperature;
+    state->temperature = currentState->temperature;
+    state->temperatureIsCelsius = currentState->temperatureIsCelsius;
+
+    return state;
 }
 
 TargetState *HotTub::getTargetState()
 {
-    return targetState;
+    TargetState *state = new TargetState();
+
+    state->pumpState = targetState->pumpState;
+    state->targetTemperature = targetState->targetTemperature;
+
+    return state;
 }
 
 void HotTub::setTargetState(int newState)

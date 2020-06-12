@@ -78,7 +78,6 @@ public:
   void setTemperatureLock(bool enable); //todo - setting in EEPROM
   void setAutoRestart(bool enable);     //todo - setting in EEPROM
 
-  int getErrorCode();
   char *getStateJson();
 
   void onCommandSent(unsigned int command);
