@@ -13,7 +13,7 @@ void HotTub::handleReceivedTemperature(unsigned int command)
 
     nextFlashCountdown -= nextFlashCountdown > 0 ? 1 : 0; //decrement flash timeout counter;
 
-    if (tubMode == TM_FLASHING && nextFlashCountdown == 0)
+    if ((tubMode == TM_FLASHING || tubMode == TM_FLASH_DETECTED) && nextFlashCountdown == 0)
         tubMode = TM_NORMAL;
 
     if (tubMode == TM_NORMAL && newTemp > 0)
