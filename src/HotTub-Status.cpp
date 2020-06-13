@@ -1,7 +1,5 @@
 #include "HotTub.h"
 
-unsigned long flashStartTime;
-
 void HotTub::handleReceivedStatus(unsigned int command)
 {
     int decodedState = decodeStatus(command);
