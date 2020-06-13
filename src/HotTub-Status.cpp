@@ -55,7 +55,7 @@ void HotTub::handleReceivedError(unsigned int command)
     if (errorCode == 0)
         return;
 
-    if (currentState->pumpState == PUMP_ERROR)
+    if (currentState->pumpState == PUMP_ERROR && currentState->errorCode == errorCode)
         return;
 
     currentState->pumpState = PUMP_ERROR;
