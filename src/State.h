@@ -8,7 +8,6 @@ struct CurrentState
     int targetTemperature; //Pump's current water temperature
     bool temperatureIsCelsius;
 
-    bool flashing;                 //whether the display is blinking or not
     unsigned int autoRestartCount; //the number of times autorestart has started the pump;
 
     int errorCode;

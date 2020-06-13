@@ -73,7 +73,6 @@ CurrentState *HotTub::getCurrentState()
 
     state->autoRestartCount = currentState->autoRestartCount;
     state->errorCode = currentState->errorCode;
-    state->flashing = currentState->flashing;
     state->pumpState = currentState->pumpState;
     state->targetTemperature = currentState->targetTemperature;
     state->temperature = currentState->temperature;
@@ -122,7 +121,6 @@ char *HotTub::getStateJson()
     currentJson["pumpState"] = currentState->pumpState;
     currentJson["temperature"] = currentState->temperature;
     currentJson["targetTemperature"] = currentState->targetTemperature;
-    currentJson["flashing"] = currentState->flashing;
 
     TargetState *targetState = getTargetState();
     JsonObject targetJson = doc.createNestedObject("targetState");
@@ -133,6 +131,7 @@ char *HotTub::getStateJson()
     doc["limitTemperature"] = getLimitTemperature();
     doc["temperatureLock"] = temperatureLockEnabled;
     doc["errorCode"] = currentState->errorCode;
+    doc["tubMode"] = tubMode;
 
     serializeJson(doc, json, 300);
     return json;
