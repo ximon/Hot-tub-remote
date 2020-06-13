@@ -174,24 +174,31 @@ void HotTubMqtt::handleValueMessages(char *topic, char *message, unsigned int le
 
 unsigned int HotTubMqtt::validateCommand(char *message)
 {
-  const size_t capacity = JSON_OBJECT_SIZE(1) + 20;
-  DynamicJsonDocument doc(capacity);
-  deserializeJson(doc, message);
-
   unsigned int command;
 
-  if (doc["command"].is<unsigned int>())
+  if (isDigit(message[0]))
   {
-    command = doc["command"];
-  }
-  else if (doc["command"].is<const char *>())
-  {
-    const char *commandStr = doc["command"]; // "0x4000"
-    command = strtol(commandStr, 0, 16);
+    command = atoi(message);
   }
   else
   {
-    return 0;
+    const size_t capacity = JSON_OBJECT_SIZE(1) + 20;
+    DynamicJsonDocument doc(capacity);
+    deserializeJson(doc, message);
+
+    if (doc["command"].is<unsigned int>())
+    {
+      command = doc["command"];
+    }
+    else if (doc["command"].is<const char *>())
+    {
+      const char *commandStr = doc["command"]; // "0x4000"
+      command = strtol(commandStr, 0, 16);
+    }
+    else
+    {
+      return 0;
+    }
   }
 
   if (command == 0)
