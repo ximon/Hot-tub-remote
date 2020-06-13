@@ -40,14 +40,6 @@ void HotTub::onCommandReceived(unsigned int command)
   logger->logf("HOTTUB->Handling command 0x%X", command);
 #endif
 
-  if (command == 0)
-  {
-#ifdef DEBUG_TUB
-    logger->log("HOTTUB->Invalid command received");
-#endif
-    return;
-  }
-
   if ((command >= TEMP_104F && command <= TEMP_9C) || command == CMD_FLASH || command == CMD_BTN_TEMP_UP || command == CMD_BTN_TEMP_DN)
   {
     handleReceivedTemperature(command);
