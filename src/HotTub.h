@@ -24,22 +24,6 @@
 #define TEMP_ADJUST_DELAY 3000 //must be less than TEMP_IGNORE_TIME!!
 #define BUTTON_SEND_DELAY 1000 //time to wait before sending buttons to change state
 
-#define PUMP_UNKNOWN -1 //haven't received a status command yet
-#define PUMP_OFF 0
-#define PUMP_FILTERING 1
-#define PUMP_HEATER_STANDBY 2
-#define PUMP_HEATING 3
-#define PUMP_BUBBLES 4
-#define PUMP_END 5
-#define PUMP_ERROR 6
-#define PUMP_FLASH 7
-
-#define TM_NORMAL 0               //temperatures are current temperatures
-#define TM_TEMP_BUTTON_DETECTED 1 //ignore temperatures until we know if it's flashing
-#define TM_FLASH_DETECTED 2       //flash detected, wait for next flash to confirm
-#define TM_FLASHING 3             //the display is currently flashing
-#define TM_TEMP_MANUAL_CHANGE 4   //the target temperature was changed on the pump
-
 class HotTub : public SendReceive
 {
 public:
