@@ -14,6 +14,9 @@ void HotTub::handleReceivedStatus(unsigned int command)
     //if we dont yet have a target state, just pick up the current state as the target.
     if (targetState->pumpState == PUMP_UNKNOWN)
     {
+        if (decodedState == PUMP_HEATER_STANDBY)
+            decodedState = PUMP_HEATING;
+
         targetState->pumpState = decodedState;
         stateChanged("Setting initial state");
         return;
