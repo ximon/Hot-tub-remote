@@ -83,7 +83,7 @@ void setupSyslog()
   logger.server(SYSLOG_SERVER, SYSLOG_PORT);
   logger.deviceHostname(DEVICE_HOSTNAME);
   logger.appName(APP_NAME);
-  logger.defaultPriority(LOG_INFO);
+  logger.defaultPriority(LOG_DEBUG);
 }
 
 bool OTASetup = false;
@@ -91,7 +91,7 @@ bool sendTestCommand = false;
 
 void onStateChange(const char *reason)
 {
-  logger.logf("State changed - %s", reason);
+  logger.logf("MAIN->State changed - %s", reason);
   hotTubMqtt.sendStatus();
 
   webSocket.broadcastTXT(hotTub.getStateJson());
@@ -123,17 +123,17 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
 {
   if (type == WStype_DISCONNECTED)
   {
-    logger.logf("[%u] Disconnected!\n", num);
+    logger.logf("WS->[%u] Disconnected!\n", num);
   }
   else if (type == WStype_CONNECTED)
   {
     IPAddress ip = webSocket.remoteIP(num);
-    logger.logf("[%u] Connected from %d.%d.%d.%d url: %s\n", num, ip[0], ip[1], ip[2], ip[3], payload);
+    logger.logf("WS->[%u] Connected from %d.%d.%d.%d url: %s\n", num, ip[0], ip[1], ip[2], ip[3], payload);
     webSocket.sendTXT(num, hotTub.getStateJson());
   }
   else if (type == WStype_TEXT)
   {
-    logger.logf("[%u] get Text: %s\n", num, payload);
+    logger.logf("WS->[%u] get Text: %s\n", num, payload);
     webSocket.sendTXT(num, "Received!");
   }
 }
@@ -175,50 +175,58 @@ const char *otaErrorToString(ota_error_t error)
     return "Receive Failed";
   case OTA_END_ERROR:
     return "End Failed";
+  default:
+    return "";
   }
 }
 
+static int lastOTAPercent;
 void setupOTA()
 {
   ArduinoOTA.setHostname(HOSTNAME);
   ArduinoOTA.onStart([]() {
     const char *type = ArduinoOTA.getCommand() == U_FLASH ? "sketch" : "filesystem";
     // NOTE: if updating FS this would be the place to unmount FS using FS.end()
-    logger.logf("Start updating %s", type);
+    logger.logf("OTA->Start updating %s", type);
   });
-  ArduinoOTA.onEnd([]() { logger.logf("\nEnd"); });
+  ArduinoOTA.onEnd([]() { logger.logf("OTA->End"); });
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-    logger.logf("Progress: %u%%\r", (progress / (total / 100)));
+    int percent = (progress / (total / 100));
+    if (lastOTAPercent == percent || percent % 5 != 0)
+      return;
+
+    logger.logf("OTA->Progress: %u%%", percent);
+    lastOTAPercent = percent;
   });
   ArduinoOTA.onError([](ota_error_t error) {
-    logger.logf("Error[%u]: ", otaErrorToString(error));
+    logger.logf("OTA->Error: %s", otaErrorToString(error));
   });
   ArduinoOTA.begin();
 
-  logger.log("OTA Setup complete.");
+  logger.log("OTA->Setup complete.");
 }
 
 void sendConnected()
 {
-  logger.log("HotTubRemote Connected");
+  logger.log("MAIN->HotTubRemote Connected");
 }
 
 void sendStartInfo()
 {
   justStarted = false;
-  logger.log("##############################");
-  logger.log("##     HOTTUB  STARTED      ##");
-  logger.log("##############################");
-  logger.logf("Uptime: %is", millis() / 1000);
+  logger.log("MAIN->##############################");
+  logger.log("MAIN->##     HOTTUB  STARTED      ##");
+  logger.log("MAIN->##############################");
+  logger.logf("MAIN->Uptime: %lu s", millis() / 1000);
 
   struct rst_info *rst = system_get_rst_info();
   const char *reasons[] = {"Normal Startup", "Hardware WDT", "Exception", "Software WDT", "Soft Restart", "Deep Sleep Awake", "External System Reset"};
 
-  logger.logf("Restart Reason: %s (%i)", reasons[rst->reason], rst->reason);
+  logger.logf("MAIN->Restart Reason: %s (%i)", reasons[rst->reason], rst->reason);
 
   if (rst->exccause > 0)
   {
-    logger.logf("excCause: %i, excVaddr: %i, epc1: %i, epc2: %i, epc3: %i, depc: %i", rst->exccause, rst->excvaddr, rst->epc1, rst->epc2, rst->epc3, rst->depc);
+    logger.logf("MAIN->excCause: %i, excVaddr: %i, epc1: %i, epc2: %i, epc3: %i, depc: %i", rst->exccause, rst->excvaddr, rst->epc1, rst->epc2, rst->epc3, rst->depc);
   }
 }
 
@@ -264,7 +272,7 @@ void setupWebServer()
   server.on("/config", [] { iotWebConf.handleConfig(); });
   server.onNotFound(handleNotFound);
   server.begin();
-  logger.log("HTTP server started.");
+  logger.log("MAIN->HTTP server started.");
 }
 
 void setupWebSocket()
