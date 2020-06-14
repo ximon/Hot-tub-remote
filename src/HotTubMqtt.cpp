@@ -296,12 +296,13 @@ void HotTubMqtt::subscribe()
 
 bool HotTubMqtt::connect()
 {
-  String clientId = "ESP8266mqttClient-" + String(random(0xffff), HEX);
+  char clientId[20];
+  sprintf(clientId, "HotTubMQTT-%li", random(0xffff));
 
   if (hasCredentials)
-    return client.connect(clientId.c_str(), mqttUser, mqttPass);
+    return client.connect(clientId, mqttUser, mqttPass);
 
-  return client.connect(clientId.c_str());
+  return client.connect(clientId);
 }
 
 const char *mqttStateToString(int state)
@@ -343,14 +344,10 @@ void HotTubMqtt::reconnect()
 
   if (!client.connected())
   {
-#ifdef DEBUG_MQTT
-    logger->log("MQTT->Connecting...");
-#endif
-
     if (connect())
     {
 #ifdef DEBUG_MQTT
-      logger->log("connected");
+      logger->log("MQTT->Connected!");
 #endif
 
       subscribe();
@@ -360,7 +357,7 @@ void HotTubMqtt::reconnect()
     }
 
 #ifdef DEBUG_MQTT
-    logger->logf("failed, state = %s, try again in 5 seconds", mqttStateToString(client.state()));
+    logger->logf("MQTT->Connection failed, state = %s, try again in 5 seconds", mqttStateToString(client.state()));
 #endif
   }
 }
