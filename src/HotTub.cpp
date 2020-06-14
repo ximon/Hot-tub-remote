@@ -22,7 +22,7 @@ HotTub::HotTub(int dataInPin, int dataOutPin, int debugPin, Syslog *syslog)
 void HotTub::onCommandSent(unsigned int command)
 {
 #ifdef DEBUG_TUB
-  logger->log("HOTTUB->Command Sent!");
+  logger->logf("HOTTUB->Sent Command 0x%X", command);
 #endif
 
   if (command == CMD_BTN_TEMP_UP || command == CMD_BTN_TEMP_DN)
