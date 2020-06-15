@@ -67,7 +67,7 @@ private:
   bool limitTemperatureIsCelsius;
 
   bool temperatureLockEnabled = false; //todo - setting in EEPROM
-  bool autoRestartEnabled = false;     //todo - setting in EEPROM
+  bool autoRestartEnabled = true;     //todo - setting in EEPROM
 
   void autoRestartCheck();
   void targetTemperatureCheck();
