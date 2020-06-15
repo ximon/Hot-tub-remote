@@ -42,9 +42,13 @@ void HotTub::handleReceivedStatus(unsigned int command)
 
     if (currentState->pumpState != decodedState)
     {
+        char msg[60];
+        sprintf(msg, "State changed from %s to %s", stateToString(currentState->pumpState), stateToString(decodedState));
+
         currentState->pumpState = decodedState;
         currentState->errorCode = 0;
-        stateChanged("State changed");
+
+        stateChanged(msg);
     }
 }
 
