@@ -71,6 +71,12 @@ void SendReceive::printMessageData(bool includeBreakdown)
   //Serial.println();
 }
 
+void SendReceive::setup()
+{
+  if (getCommandQueueCount() > 0)
+    printCommandQueue();
+}
+
 int eraseCount;
 void SendReceive::loop()
 {
