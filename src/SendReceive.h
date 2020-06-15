@@ -56,6 +56,7 @@ class SendReceive
 {
 public:
   SendReceive(int dataInPin, int dataOutPin, int debugPin, Syslog *syslog);
+  void setup();
   void loop();
 
   virtual void onCommandReceived(unsigned int command) = 0;
@@ -83,14 +84,14 @@ private:
   void (*setTimer)(int us);
   Syslog *logger;
 
-  int bitIndex;
+  volatile int bitIndex;
   //int bitCount;
-  unsigned int times[16];
-  bool states[16];
+  volatile unsigned int times[16];
+  volatile bool states[16];
 
-  int dataIndex = 0;
-  unsigned long dataStart = 0;
-  unsigned long lastBitStartTime = 0;
+  volatile int dataIndex = 0;
+  volatile unsigned long dataStart = 0;
+  volatile unsigned long lastBitStartTime = 0;
 
   int getSendBitTime(int bitPos);
 
@@ -102,7 +103,7 @@ private:
   volatile int RECV_MODE;
 
   unsigned int commandQueue[MAX_OUT_COMMANDS];
-  int commandQueueCount;
+  volatile int commandQueueCount;
 
   volatile unsigned int receivedCommand;
 
@@ -118,16 +119,14 @@ private:
   void processIncomingCommand();
   void sendCommand(unsigned int command);
 
-  unsigned long now;
   unsigned long bitTime;
   bool nonStartBit;
   bool validStartBit;
-  bool bitState;
-  bool lastBitState;
+  volatile bool lastBitState;
 
   void printCommandQueue();
   int getReceiveBitTime(int bitIndex);
-  unsigned int decode(unsigned int times[], bool states[]);
+  unsigned int decode(volatile unsigned int times[], volatile bool states[]);
 };
 
 #endif

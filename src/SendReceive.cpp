@@ -146,7 +146,7 @@ int SendReceive::getReceiveBitTime(int bitIndex)
   }
 }
 
-unsigned int SendReceive::decode(unsigned int times[], bool states[])
+unsigned int SendReceive::decode(volatile unsigned int times[], volatile bool states[])
 {
   unsigned int data = 0;
   int decodeBit = 1;
@@ -183,8 +183,8 @@ unsigned int SendReceive::decode(unsigned int times[], bool states[])
 
 void ICACHE_RAM_ATTR SendReceive::dataInterrupt()
 {
-  now = micros();
-  bitState = GPIP(dataInPin);
+  unsigned now = micros();
+  bool bitState = GPIP(dataInPin);
 
   if (SEND_MODE != SM_WAIT)
     return;
