@@ -44,7 +44,7 @@ void HotTub::onCommandReceived(unsigned int command)
   {
     handleReceivedTemperature(command);
     //no return, we need the buttons to get picked up by other checks
-    if (command >= TEMP_104F && command <= TEMP_9C)
+    if ((command >= TEMP_104F && command <= TEMP_9C) || command == CMD_FLASH)
       return;
   }
 
@@ -65,6 +65,8 @@ void HotTub::onCommandReceived(unsigned int command)
     handleReceivedError(command);
     return;
   }
+
+  logger->logf("HOTTUB->Unknown command received - 0x%X", command);
 }
 
 void HotTub::targetTemperatureCheck()
