@@ -195,6 +195,7 @@ void HotTub::targetStateCheck()
 
 void HotTub::setup(void (&onStateChange)(const char *reason))
 {
+  SendReceive::setup();
   stateChanged = onStateChange;
 }
 
