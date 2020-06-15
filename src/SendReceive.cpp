@@ -35,28 +35,40 @@ void SendReceive::printMessageData(bool includeBreakdown)
   if (!includeBreakdown)
     return;
 
-  //todo - send this to logger
   int i;
-  for (i = 0; i < dataIndex; i++)
-  {
-    Serial.print(i);
-    Serial.print("\t");
-  }
-  Serial.println();
+
+  char msg[100];
 
   for (i = 0; i < dataIndex; i++)
   {
-    Serial.print(states[i]);
-    Serial.print("\t");
+    sprintf(msg, "%s%i\t", msg, i);
+    //Serial.print(i);
+    //Serial.print("\t");
   }
+  logger->log(msg);
   Serial.println();
+
+  msg[0] = '\0';
 
   for (i = 0; i < dataIndex; i++)
   {
-    Serial.print(times[i]);
-    Serial.print("\t");
+    sprintf(msg, "%s%i\t", msg, states[i]);
+    //Serial.print(states[i]);
+    //Serial.print("\t");
   }
-  Serial.println();
+  logger->log(msg);
+  //Serial.println();
+
+  msg[0] = '\0';
+
+  for (i = 0; i < dataIndex; i++)
+  {
+    sprintf(msg, "%s%i\t", msg, times[i]);
+    //Serial.print(times[i]);
+    //Serial.print("\t");
+  }
+  logger->log(msg);
+  //Serial.println();
 }
 
 int eraseCount;
@@ -74,7 +86,9 @@ void SendReceive::loop()
         states[dataIndex] = lastBitState;
     }
     receivedCommand = decode(times, states);
-    //printMessageData(false);
+
+    if (receivedCommand == 0x16D2 || receivedCommand == 0x518 || receivedCommand == 0x5E8)
+      printMessageData(false);
 
     dataStart = 0;
     dataIndex = 0;
