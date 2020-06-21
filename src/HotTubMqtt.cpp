@@ -225,7 +225,10 @@ void HotTubMqtt::handleRawCommand(char *message)
   unsigned int command = validateCommand(message);
 
   if (command <= 0)
+  {
+    logger->logf("MQTT-> Command '%s' missing / invalid", message);
     return;
+  }
 
   if (hotTub->queueCommand(command))
   {
