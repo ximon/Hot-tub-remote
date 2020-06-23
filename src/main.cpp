@@ -89,14 +89,6 @@ void setupSyslog()
 bool OTASetup = false;
 bool sendTestCommand = false;
 
-void onStateChange(const char *reason)
-{
-  logger.logf("MAIN->State changed - %s", reason);
-  hotTubMqtt.sendStatus();
-
-  webSocket.broadcastTXT(hotTub.getStateJson());
-}
-
 void handle_root()
 {
   // -- Captive portal request were already served.
@@ -114,9 +106,28 @@ void handle_root()
   server.send(200, "text/html", html);
 }
 
+void onStateChange(const char *reason)
+{
+  logger.logf("MAIN->State changed - %s", reason);
+  hotTubMqtt.sendStatus();
+
+  webSocket.broadcastTXT(hotTub.getStateJson());
+}
+
+void ICACHE_RAM_ATTR handleSetTimer(uint32_t ticks)
+{
+  timer1_enable(TIM_DIV16, TIM_EDGE, TIM_SINGLE);
+  timer1_write(ticks);
+}
+
 void ICACHE_RAM_ATTR handleDataInterrupt()
 {
   hotTub.dataInterrupt();
+}
+
+void ICACHE_RAM_ATTR handleTimerInterrupt()
+{
+  hotTub.timerInterrupt();
 }
 
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
@@ -140,16 +151,28 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
 
 void setupBoard()
 {
+  Serial.begin(115200);
+
   pinMode(DBG, OUTPUT);
   pinMode(LED, OUTPUT);
   pinMode(DATA_IN, INPUT);
   pinMode(DATA_OUT, OUTPUT); // Override default Serial initiation
   pinMode(DATA_ENABLE, OUTPUT);
-  digitalWrite(DATA_OUT, 0);
+
+  pinMode(D3, OUTPUT);
+  pinMode(D6, OUTPUT);
+
+  digitalWrite(DATA_OUT, LOW);
   digitalWrite(DATA_ENABLE, LOW);
 
   WiFi.hostname(HOSTNAME);
   WiFi.setSleepMode(WIFI_NONE_SLEEP);
+}
+
+void setupInterrupts()
+{
+  timer1_attachInterrupt(handleTimerInterrupt);
+  attachInterrupt(digitalPinToInterrupt(DATA_IN), handleDataInterrupt, CHANGE);
 }
 
 void setupMqtt()
@@ -286,28 +309,21 @@ void mqttCallback(char *topic, byte *payload, unsigned int length)
   hotTubMqtt.callback(topic, payload, length);
 }
 
-void enableInterrupts()
-{
-  attachInterrupt(digitalPinToInterrupt(DATA_IN), handleDataInterrupt, CHANGE);
-}
-
 void setup(void)
 {
-  Serial.begin(115200);
-
   setupBoard();
   setupIotWebConf();
   setupWebServer();
   setupWebSocket();
-  hotTub.setup(onStateChange);
+  hotTub.setup(onStateChange, handleSetTimer);
   hotTubApi.setup();
   hotTubMqtt.setup(*mqttCallback);
-
-  enableInterrupts();
 }
 
 void loop(void)
 {
+  //digitalWrite(D6, HIGH);
+
   ArduinoOTA.handle();
   iotWebConf.doLoop(); // doLoop should be called as frequently as possible.
   webSocket.loop();
@@ -315,4 +331,9 @@ void loop(void)
 
   hotTubMqtt.loop();
   hotTub.loop();
+
+  if (millis() > 10000)
+    setupInterrupts();
+
+  //digitalWrite(D6, LOW);
 }

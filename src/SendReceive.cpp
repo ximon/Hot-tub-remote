@@ -1,4 +1,5 @@
 #include "SendReceive.h"
+#include "Pins.h"
 #include <i2s.h>
 #include <i2s_reg.h>
 
@@ -21,92 +22,18 @@ SendReceive::SendReceive(int dataInPin, int dataEnablePin, int debugPin, Syslog 
   this->debugPinBit = 1 << debugPin;
 
   SEND_MODE = SM_WAIT;
-  RECV_MODE = RM_WAIT_PULSE;
-
-  dataIndex = 0;
-  dataStart = 0;
-  lastBitStartTime = 0;
 }
 
-void SendReceive::printMessageData(bool includeBreakdown)
+void SendReceive::setup(void (&onSetTimer)(uint32_t ticks))
 {
-  logger->logf("SR->Data: 0x%X", receivedCommand);
+  setTimer = onSetTimer;
 
-  if (!includeBreakdown)
-    return;
-
-  int i;
-
-  char msg[100];
-
-  for (i = 0; i < dataIndex; i++)
-  {
-    sprintf(msg, "%s%i\t", msg, i);
-    //Serial.print(i);
-    //Serial.print("\t");
-  }
-  logger->log(msg);
-  Serial.println();
-
-  msg[0] = '\0';
-
-  for (i = 0; i < dataIndex; i++)
-  {
-    sprintf(msg, "%s%i\t", msg, states[i]);
-    //Serial.print(states[i]);
-    //Serial.print("\t");
-  }
-  logger->log(msg);
-  //Serial.println();
-
-  msg[0] = '\0';
-
-  for (i = 0; i < dataIndex; i++)
-  {
-    sprintf(msg, "%s%i\t", msg, times[i]);
-    //Serial.print(times[i]);
-    //Serial.print("\t");
-  }
-  logger->log(msg);
-  //Serial.println();
-}
-
-void SendReceive::setup()
-{
   if (getCommandQueueCount() > 0)
     printCommandQueue();
 }
 
-int eraseCount;
 void SendReceive::loop()
 {
-  if (dataStart > 0 && micros() - dataStart >= MAX_MESSAGE_LEN && dataIndex > 0)
-  {
-    //GPOC = debugPinBit;
-    //logger->log("Decoding Data...");
-    if (dataIndex < 15)
-    {
-      times[dataIndex] = micros() - lastBitStartTime;
-
-      if (times[dataIndex] >= BIT_TIME && states[dataIndex - 1] == true)
-        states[dataIndex] = lastBitState;
-    }
-    receivedCommand = decode(times, states);
-
-    if (receivedCommand == 0x16D2 || receivedCommand == 0x518 || receivedCommand == 0x5E8)
-      printMessageData(false);
-
-    dataStart = 0;
-    dataIndex = 0;
-    for (eraseCount = 0; eraseCount <= BIT_COUNT; eraseCount++)
-    {
-      times[eraseCount] = 0;
-      states[eraseCount] = false;
-    }
-  }
-
-  processIncomingCommand();
-
   //dont send if we haven't received anything yet
   if (!ALLOW_SEND_WITHOUT_RECEIVE && lastCommandReceivedTime == 0)
   {
@@ -134,108 +61,220 @@ void SendReceive::loop()
     return;
   }
 
+  processIncomingCommand();
   processOutgoingCommandQueue();
 }
 
-int SendReceive::getReceiveBitTime(int bitIndex)
+int ICACHE_RAM_ATTR SendReceive::getReceiveBitTime(int bitIndex)
 {
-  switch (bitIndex)
-  {
-  case 0:
-    return DATA_START_LEN;
-  case 1:
-    return BUTTON_TIME;
-  case 4:
-    return SHORT_BIT_TIME;
-  default:
-    return BIT_TIME;
-  }
-}
+  //start off at half a bit so that each full bit lands us in the middle of a bit
+  if (bitIndex == 0)
+    return HALF_BIT_RELOAD;
 
-unsigned int SendReceive::decode(volatile unsigned int times[], volatile bool states[])
-{
-  unsigned int data = 0;
-  int decodeBit = 1;
-  int bitTime = getReceiveBitTime(decodeBit);
-  int remaining = 0;
-  int totalTime = times[0];
+  //bit 10 is the last bit of the start pulse, bit 11 is the first low after the start bit
+  if (bitIndex == 10 || bitIndex == 11)
+    return THREE_QUARTERS_BIT_RELOAD;
 
-  for (int i = 1; i < 13; i++)
-  {
-    remaining = times[i];
-
-    if (totalTime > MAX_MESSAGE_LEN || times[i] == 0)
-      return data;
-
-    while (remaining >= bitTime - BIT_TOLERANCE)
-    {
-      data <<= 1;
-      data += states[i] ? 1 : 0;
-      remaining -= bitTime - BIT_TOLERANCE;
-      totalTime += bitTime - BIT_TOLERANCE;
-      decodeBit++;
-
-      bitTime = getReceiveBitTime(decodeBit);
-
-      if (totalTime > MAX_MESSAGE_LEN)
-        return data;
-    }
-  }
-
-  //logger->logf("Total time was %i", totalTime);
-
-  return data;
+  return ONE_BIT_RELOAD;
 }
 
 void ICACHE_RAM_ATTR SendReceive::dataInterrupt()
 {
-  unsigned now = micros();
-  bool bitState = GPIP(dataInPin);
-
-  if (SEND_MODE != SM_WAIT)
+  //cant disable the interrupt as the code in the lib doesn't have ICACHE_RAM_ATTR -> Exceptions Occur
+  if (!dataInterruptEnabled)
     return;
 
-  if (dataStart == 0 && bitState == 1)
+  incomingData = 0;
+  sampleCounter = 0;
+
+  setTimer(getReceiveBitTime(sampleCounter));
+  dataInterruptEnabled = false;
+  digitalWrite(D6, LOW);
+  digitalWrite(LED, LOW);
+}
+
+#define Debug_All_Interrupts
+void ICACHE_RAM_ATTR SendReceive::timerInterrupt()
+{
+  bool dataState = digitalRead(DATA_IN);
+  sampleCounter++;
+
+  //if the interrupt is enabled we've missed the rising edge of the start bit!
+  //it looks like this happens when dealing with wifi, so we have to start a timer
+  //and periodically check to see if we're in the start bit
+  if (dataInterruptEnabled)
   {
-    states[dataIndex] = 1;
-    lastBitState = bitState;
-    dataStart = now - BIT_TIME_ADJUST;
-    dataIndex = 0;
+    startPulseLength = 0;
+    pollingForStartPulseEnd = true;
+    dataInterruptEnabled = false;
+    digitalWrite(D6, LOW);
+    digitalWrite(D3, true);
+    delayMicroseconds(10);
+    digitalWrite(D3, false);
   }
-  else
+
+  if (pollingForStartPulseEnd)
   {
-    bitTime = dataIndex == 0
-                  ? (now - dataStart)
-                  : (now - lastBitStartTime);
+    digitalWrite(D3, true);
+    delayMicroseconds(10);
+    digitalWrite(D3, false);
 
-    nonStartBit = dataIndex > 0;
-    validStartBit = dataIndex == 0 && bitTime >= DATA_START_LEN_MIN && bitTime <= DATA_START_LEN_MAX && bitState == 0;
-
-    //only start incrementing once a valid start pulse has been found
-    if (validStartBit || nonStartBit)
+    if (dataState)
     {
-      times[dataIndex] = bitTime;
-      dataIndex++;
-      lastBitState = !lastBitState;
-      states[dataIndex] = lastBitState;
+      startPulseLength++;
+      setTimer(START_POLL_RELOAD);
+      return;
     }
     else
     {
-      dataStart = now - BIT_TIME_ADJUST;
+      //we've found the end of a start bit
+      if (startPulseLength > START_PULSE_MIN_LENGTH && startPulseLength <= START_PULSE_MAX_LENGTH)
+      {
+        sampleCounter = SAMPLE_COUNT_END_OF_START_PULSE;
+        commandRecovered = true;
+      }
+      else
+      {
+        //we've missed it, ignore this one and look for next pulse
+        dataInterruptEnabled = true;
+        digitalWrite(D6, HIGH);
+        sampleCounter = 0;
+      }
+
+      pollingForStartPulseEnd = false;
     }
   }
 
-  lastBitStartTime = now - BIT_TIME_ADJUST;
+#ifdef Debug_All_Interrupts
+  digitalWrite(DBG, true);
+#endif
+
+  //the start bit is 10 bits long
+  if (sampleCounter < SAMPLE_COUNT_LAST_START_BIT)
+  {
+    if (dataState)
+    {
+      //increment start bit length counter
+      startBitCount++;
+    }
+    else
+    {
+      //reset and start looking for a start bit again
+      badDataReason = 1;
+      sampleCounter = 0;
+      startBitCount = 0;
+    }
+  }
+
+  //the last bit of the start bits
+  if (sampleCounter == SAMPLE_COUNT_LAST_START_BIT)
+  {
+    //check if start bit count was 10
+    if (!dataState)
+    {
+      //reset and start looking for a start bit again
+      badDataReason = 2;
+      sampleCounter = 0;
+      startBitCount = 0;
+    }
+  }
+
+  //the low before the first data bit
+  if (sampleCounter == SAMPLE_COUNT_END_OF_START_PULSE)
+  {
+    if (dataState)
+    {
+      //reset and start looking for a start bit again
+      badDataReason = 3;
+      sampleCounter = 0;
+      startBitCount = 0;
+    }
+  }
+
+  //for all bits after the start bit
+  if (sampleCounter > SAMPLE_COUNT_END_OF_START_PULSE && sampleCounter < SAMPLE_COUNT_TOTAL_BITS)
+  {
+#if defined Debug_Data_Only || defined Debug_All_Interrupts
+    digitalWrite(DBG, true);
+#endif
+    incomingData <<= 1;
+    incomingData += dataState ? 1 : 0;
+  }
+
+  if (sampleCounter < SAMPLE_COUNT_TOTAL_BITS && badDataReason == 0)
+  {
+    //reload the timer to test the next bit
+    setTimer(getReceiveBitTime(sampleCounter));
+  }
+  else
+  {
+    lastCommandReceivedTime = millis();
+    receivedCommand = incomingData;
+    incomingData = 0;
+
+    //re-enable data interrupt to detect next start bit
+    digitalWrite(D6, HIGH);
+    dataInterruptEnabled = true;
+    digitalWrite(LED, true);
+
+    //set the timer to trigger ~31ms from now
+    //if !dataInterruptEnabled then we'll retrigger every 100us
+    //to try and pick up the missed start of the start pulse
+    setTimer(DETECT_MISSED_NEXT_START_PULSE);
+  }
+
+#if defined Debug_Data_Only || defined Debug_All_Interrupts
+  digitalWrite(DBG, false);
+#endif
+
+  if (badDataReason > 0)
+  {
+    digitalWrite(D3, true);
+    delayMicroseconds(10);
+    digitalWrite(D3, false);
+  }
 }
 
-unsigned long SendReceive::getLastCommandSentTime()
+void SendReceive::processIncomingCommand()
 {
-  return lastCommandSentTime;
+  if (receivedCommand == 0)
+  {
+    if (badDataReason > 0)
+    {
+      Serial.print("SR->Bad Data, Reason: ");
+      Serial.println(badDataReason);
+      badDataReason = 0;
+    }
+
+    return;
+  }
+
+  unsigned int command = receivedCommand;
+  receivedCommand = 0;
+
+  if (commandRecovered)
+  {
+    commandRecovered = false;
+    logger->logf("SR->Recovered command 0x%X", receivedCommand);
+    Serial.println("SR->Recovered a command!!");
+  }
+
+  lastCommandReceivedTime = millis();
+  onCommandReceived(command);
 }
 
 unsigned long SendReceive::getLastCommandReceivedTime()
 {
   return lastCommandReceivedTime;
+}
+
+/*##############################*/
+/*##         Sending          ##*/
+/*##############################*/
+
+unsigned long SendReceive::getLastCommandSentTime()
+{
+  return lastCommandSentTime;
 }
 
 unsigned long SendReceive::getLastCommandQueuedTime()
@@ -296,20 +335,6 @@ int SendReceive::getCommandQueueCount()
   return commandQueueCount;
 }
 
-void SendReceive::processIncomingCommand()
-{
-  if (receivedCommand == 0)
-    return;
-
-  unsigned int command = receivedCommand;
-  receivedCommand = 0;
-
-  //logger->logf("Received command 0x%X", command);
-
-  lastCommandReceivedTime = millis();
-  onCommandReceived(command);
-}
-
 void SendReceive::processOutgoingCommandQueue()
 {
   if (commandQueueCount == 0)
@@ -352,6 +377,8 @@ void SendReceive::sendCommand(unsigned int command)
 #ifdef DEBUG_SR
   logger->logf("SR->Sending command 0x%X", command);
 #endif
+
+  dataInterruptEnabled = false;
 
   commandToSend = command;
 
@@ -402,4 +429,6 @@ void SendReceive::sendCommand(unsigned int command)
   SEND_MODE = SM_WAIT;
 
   i2s_end();
+
+  dataInterruptEnabled = true;
 }

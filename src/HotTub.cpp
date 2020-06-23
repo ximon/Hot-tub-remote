@@ -193,9 +193,11 @@ void HotTub::targetStateCheck()
  * Setup and loop
  */
 
-void HotTub::setup(void (&onStateChange)(const char *reason))
+void HotTub::setup(
+    void (&onStateChange)(const char *reason),
+    void (&onSetTimer)(uint32_t ticks))
 {
-  SendReceive::setup();
+  SendReceive::setup(onSetTimer);
   stateChanged = onStateChange;
 }
 

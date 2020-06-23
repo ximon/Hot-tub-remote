@@ -50,7 +50,7 @@ public:
   void onCommandReceived(unsigned int command);
 
   void loop();
-  void setup(void (&onStateChange)(const char *reason));
+  void setup(void (&onStateChange)(const char *reason), void (&onSetTimer)(uint32_t ticks));
 
 private:
   void (*stateChanged)(const char *reason);
@@ -67,7 +67,7 @@ private:
   bool limitTemperatureIsCelsius;
 
   bool temperatureLockEnabled = false; //todo - setting in EEPROM
-  bool autoRestartEnabled = true;     //todo - setting in EEPROM
+  bool autoRestartEnabled = true;      //todo - setting in EEPROM
 
   void autoRestartCheck();
   void targetTemperatureCheck();

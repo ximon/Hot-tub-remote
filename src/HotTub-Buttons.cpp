@@ -65,7 +65,7 @@ void HotTub::handleTempButtonPress(unsigned int command)
     //if its not flashing then the temperature won't change
     if (tubMode != TM_FLASHING && tubMode != TM_FLASH_DETECTED)
     {
-        logger->logf("HOTTUB->Ignoring, TubMode was %s", tubModeToString(tubMode));
+        logger->logf("HOTTUB->Ignoring button press - TubMode was %s", tubModeToString(tubMode));
         return;
     }
 

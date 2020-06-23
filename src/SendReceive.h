@@ -5,46 +5,19 @@
 
 #include <Syslog.h>
 
-#define ALLOW_SEND_WITHOUT_RECEIVE true  //enable this to allow sending commands without having first received any
+#define ALLOW_SEND_WITHOUT_RECEIVE false //enable this to allow sending commands without having first received any
 #define IGNORE_INVALID_START_PULSE false //enable this to allow testing without a valid start pulse
 
 #define WAIT_AFTER_RECEIVE_COMMAND 10 //milliseconds to wait after a command has been received before sending a command, the window is ~40ms
 #define WAIT_AFTER_SEND_COMMANDS 100  //millisconds to wait after sending a command before sending another command
 
 //Timings in us
-#define MAX_MESSAGE_LEN 10300
-
-#define START_TOLERANCE 100
-#define BIT_TOLERANCE 10
-#define BIT_TIME_ADJUST 3
-#define BUTTON_TIME 147
-#define BIT_TIME 440
-#define SHORT_BIT_TIME 330
-
-#define DATA_START_LEN 4440 //length of the start pulse in us
-#define DATA_START_LEN_MIN DATA_START_LEN - START_TOLERANCE
-#define DATA_START_LEN_MAX DATA_START_LEN + START_TOLERANCE
 
 //Timings in ticks
-#define IN_START_PULSE_TIME 1410   //4540us, 100us after start pulse
-#define IN_DATA_CLOCK_TIME_BTN 106 //340us
-#define DATA_CLOCK_TIME 138        //440us 1 bit time
-
-#define OUT_START_PULSE_TIME 1380 //4440us, start pulse
-#define OUT_START_GAP_TIME 44     //150us
-#define OUT_BUTTON_TIME 137       // 440us
-
 #define BIT_COUNT 13 //number of bits to read in
 #define DATA_MASK 1 << (BIT_COUNT - 1)
 
 #define MAX_OUT_COMMANDS 20 //maximum number of commands to keep in the outgoing queue
-
-/*
- * RM_WAIT_PULSE, start pulse received -> RM_WAIT_PULSE_END, timer elapses -> RM_WAIT_DATA_END, 13 bits clocked in -> RM_WAIT_PULSE
- */
-#define RM_WAIT_PULSE 0     //waiting for the start pulse to go high
-#define RM_WAIT_PULSE_END 1 //waiting for the start pulse to go low
-#define RM_WAIT_DATA_END 2  //waiting for the data to end
 
 /*
  * SM_WAIT, data in out buffer -> SM_START_END, timer elapses -> SM_GAP_END, timer elapses -> SM_BUTTON_END, 13 bits clocked out -> SM_WAIT
@@ -56,13 +29,14 @@ class SendReceive
 {
 public:
   SendReceive(int dataInPin, int dataOutPin, int debugPin, Syslog *syslog);
-  void setup();
+  void setup(void (&onSetTimer)(uint32_t ticks));
   void loop();
 
   virtual void onCommandReceived(unsigned int command) = 0;
   virtual void onCommandSent(unsigned int command) = 0;
 
   void ICACHE_RAM_ATTR dataInterrupt();
+  void ICACHE_RAM_ATTR timerInterrupt();
 
   unsigned long getLastCommandSentTime();
   unsigned long getLastCommandQueuedTime();
@@ -81,34 +55,53 @@ private:
   int debugPin;
   int debugPinBit;
 
-  void (*setTimer)(int us);
+  void (*setTimer)(uint32_t ticks);
   Syslog *logger;
 
-  volatile int bitIndex;
-  //int bitCount;
-  volatile unsigned int times[16];
-  volatile bool states[16];
+  //receiving
+  volatile bool dataInterruptEnabled = true;
+  volatile int sampleCounter = 0;
+  volatile int startBitCount = 0;
+  volatile bool startBitOk = false;
+  volatile unsigned int incomingData = 0;
+  int ICACHE_RAM_ATTR getReceiveBitTime(int bitIndex);
+  volatile unsigned int commandReceivedAt = 0;
+  void processIncomingCommand();
+  int startPulseLength = 0;
+  volatile unsigned int receivedCommand;
+  bool pollingForStartPulseEnd = false;
+  volatile bool commandRecovered = false;
 
-  volatile int dataIndex = 0;
-  volatile unsigned long dataStart = 0;
-  volatile unsigned long lastBitStartTime = 0;
+#define ONE_BIT_RELOAD 2185 // 440us
+#define HALF_BIT_RELOAD ONE_BIT_RELOAD / 2
+#define THREE_QUARTERS_BIT_RELOAD (ONE_BIT_RELOAD / 4) * 3
+#define START_POLL_RELOAD 431 //100us
 
-  int getSendBitTime(int bitPos);
+#define DETECT_MISSED_NEXT_START_PULSE 155000 //~31 ms
 
-  unsigned long startPulseLength;
-  unsigned long startPulseStartTime;
-  bool invalidStartPulse;
-  volatile unsigned int inBitPos;
-  volatile unsigned int inData;
+#define START_PULSE_MIN_LENGTH 4
+#define START_PULSE_MAX_LENGTH 44
+
+//bit positions
+#define SAMPLE_COUNT_LAST_START_BIT 10
+#define SAMPLE_COUNT_END_OF_START_PULSE 11
+#define SAMPLE_COUNT_TOTAL_BITS 25
+
+#define BAD_DATA_START_BIT_TOO_SHORT 1
+#define BAD_DATA_START_BIT_LAST_BIT_NOT_HIGH 2
+#define BAD_DATA_BIT_AFTER_START_BIT_NOT_LOW 3
+  volatile int badDataReason = 0;
+
   volatile int RECV_MODE;
+
+  //sending
+  volatile int bitIndex;
+  int getSendBitTime(int bitPos);
 
   unsigned int commandQueue[MAX_OUT_COMMANDS];
   volatile int commandQueueCount;
 
-  volatile unsigned int receivedCommand;
-
   unsigned int commandToSend;
-  unsigned int outBitPos;
   int SEND_MODE;
 
   unsigned long lastCommandSentTime;
@@ -116,17 +109,9 @@ private:
   unsigned long lastCommandReceivedTime;
 
   void processOutgoingCommandQueue();
-  void processIncomingCommand();
   void sendCommand(unsigned int command);
 
-  unsigned long bitTime;
-  bool nonStartBit;
-  bool validStartBit;
-  volatile bool lastBitState;
-
   void printCommandQueue();
-  int getReceiveBitTime(int bitIndex);
-  unsigned int decode(volatile unsigned int times[], volatile bool states[]);
 };
 
 #endif
