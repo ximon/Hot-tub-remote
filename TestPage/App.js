@@ -40,6 +40,9 @@ addClassClick('blower', e => tub.blower(e.target.dataset.state));
 addClassClick('pump', e => tub.pump(e.target.dataset.state));
 addClassClick('heater', e => tub.heater(e.target.dataset.state));
 
+//tub.addEventListener('stateChange')
+
+addClassClick('rawHeater', e => tub.sendCommand('0x182F'));
 
 
 
