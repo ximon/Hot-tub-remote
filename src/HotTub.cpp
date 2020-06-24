@@ -3,7 +3,7 @@
 #include "Temperatures.h"
 #include "SendReceive.h"
 
-#include <SysLog.h>
+#include <Syslog.h>
 
 #define DEBUG_TUB
 
