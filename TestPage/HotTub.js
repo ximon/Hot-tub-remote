@@ -21,9 +21,10 @@ export class HotTub {
       temperatureLock: false,
     };
 
-    this.connect();
+    //this.connect();
   }
 
+  /*
   connect() {
     this.websocket = new WebSocket(`ws://${this.ip}:${this.websocketPort}`);
 
@@ -32,6 +33,7 @@ export class HotTub {
       this.state = JSON.parse(event.data);
     });
   }
+  */
 
   async http(uri, method) {
     this.setText("");
