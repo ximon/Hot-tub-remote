@@ -37,8 +37,6 @@ F 3 "http://www.ti.com/lit/ds/symlink/sn74lvc1t45.pdf" H 4300 1300 50  0001 C CN
 	1    0    0    -1  
 $EndComp
 Wire Wire Line
-	5300 1550 5300 1500
-Wire Wire Line
 	5100 1550 5100 1500
 Text GLabel 4300 1850 0    50   Input ~ 0
 RX
@@ -96,15 +94,13 @@ Wire Wire Line
 	4750 1950 4800 1950
 Wire Wire Line
 	4350 1850 4300 1850
-Wire Wire Line
-	5300 1500 5850 1500
-Text GLabel 5850 1500 2    50   Input ~ 0
+Text GLabel 5850 1350 2    50   Input ~ 0
 VCC
 Text GLabel 4350 2350 0    50   Input ~ 0
 GND
-Text Notes 4150 1350 0    50   ~ 0
+Text Notes 4150 1250 0    50   ~ 0
 ESP8266
-Text Notes 5750 1350 0    50   ~ 0
+Text Notes 5750 1250 0    50   ~ 0
 Hot Tub
 Wire Wire Line
 	5600 1950 5800 1950
@@ -128,4 +124,13 @@ Wire Wire Line
 	4350 2350 5200 2350
 Wire Wire Line
 	4350 1500 5100 1500
+Text GLabel 4350 1350 0    50   Input ~ 0
+VCC
+Wire Wire Line
+	4350 1350 5300 1350
+Connection ~ 5300 1350
+Wire Wire Line
+	5300 1350 5850 1350
+Wire Wire Line
+	5300 1350 5300 1550
 $EndSCHEMATC
