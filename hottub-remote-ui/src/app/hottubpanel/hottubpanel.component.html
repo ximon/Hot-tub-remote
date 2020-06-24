@@ -1,0 +1,20 @@
+<mat-card>
+    <mat-card-header>
+        <mat-card-title>
+            State
+        </mat-card-title>
+    </mat-card-header>
+    <mat-button-toggle-group name="state">
+        <mat-button-toggle value="0" (change)="changeState($event.value)">Off</mat-button-toggle>
+        <mat-button-toggle value="1" (change)="changeState($event.value)">Pump</mat-button-toggle>
+        <mat-button-toggle value="3" (change)="changeState($event.value)">Heating</mat-button-toggle>
+        <mat-button-toggle value="4" (change)="changeState($event.value)">Bubbles</mat-button-toggle>
+    </mat-button-toggle-group>    
+</mat-card>
+
+<mat-card>
+    <mat-card-header>
+        <mat-card-title>Temperature</mat-card-title>
+    </mat-card-header>
+    <mat-slider thumbLabel min="20" max="40"></mat-slider>
+</mat-card>
