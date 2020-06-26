@@ -78,6 +78,17 @@ int ICACHE_RAM_ATTR SendReceive::getReceiveBitTime(int bitIndex)
   return ONE_BIT_RELOAD;
 }
 
+//
+//
+// D3 - pulse when missing start pulse detected
+// D5 - pulse when starting missing pulse timer
+// D6 - high from edge interrupt to end of command
+//
+//
+//
+//
+
+volatile bool waitingForMissedStartPulse = false;
 void ICACHE_RAM_ATTR SendReceive::dataInterrupt()
 {
   //cant disable the interrupt as the code in the lib doesn't have ICACHE_RAM_ATTR -> Exceptions Occur
@@ -86,39 +97,49 @@ void ICACHE_RAM_ATTR SendReceive::dataInterrupt()
 
   incomingData = 0;
   sampleCounter = 0;
+  waitingForMissedStartPulse = false;
 
   setTimer(getReceiveBitTime(sampleCounter));
   dataInterruptEnabled = false;
-  digitalWrite(D6, LOW);
-  digitalWrite(LED, LOW);
 }
 
+/*
+RM_NORMAL - waiting for start pulse to get picked up by data interrupt
+RM_TRIGGERED - triggered by data interrupt
+RM_MISSED
+*/
+
 #define Debug_All_Interrupts
+#define Debug_Data
+bool dataState;
 void ICACHE_RAM_ATTR SendReceive::timerInterrupt()
 {
-  bool dataState = digitalRead(DATA_IN);
+  dataState = digitalRead(DATA_IN);
   sampleCounter++;
+
+  digitalWrite(D5, HIGH);
+
+  //digitalWrite(D8, HIGH);
+  //delayMicroseconds(10);
+  //digitalWrite(D8, LOW);
 
   //if the interrupt is enabled we've missed the rising edge of the start bit!
   //it looks like this happens when dealing with wifi, so we have to start a timer
   //and periodically check to see if we're in the start bit
-  if (dataInterruptEnabled)
+  if (waitingForMissedStartPulse)
   {
-    startPulseLength = 0;
-    pollingForStartPulseEnd = true;
     dataInterruptEnabled = false;
-    digitalWrite(D6, LOW);
-    digitalWrite(D3, true);
+    waitingForMissedStartPulse = false;
+    pollingForStartPulseEnd = true;
+    startPulseLength = 0;
+
+    digitalWrite(D3, HIGH);
     delayMicroseconds(10);
-    digitalWrite(D3, false);
+    digitalWrite(D3, LOW);
   }
 
   if (pollingForStartPulseEnd)
   {
-    digitalWrite(D3, true);
-    delayMicroseconds(10);
-    digitalWrite(D3, false);
-
     if (dataState)
     {
       startPulseLength++;
@@ -137,7 +158,7 @@ void ICACHE_RAM_ATTR SendReceive::timerInterrupt()
       {
         //we've missed it, ignore this one and look for next pulse
         dataInterruptEnabled = true;
-        digitalWrite(D6, HIGH);
+        //digitalWrite(D6, HIGH);
         sampleCounter = 0;
       }
 
@@ -146,7 +167,7 @@ void ICACHE_RAM_ATTR SendReceive::timerInterrupt()
   }
 
 #ifdef Debug_All_Interrupts
-  digitalWrite(DBG, true);
+  //digitalWrite(DBG, true);
 #endif
 
   //the start bit is 10 bits long
@@ -156,6 +177,8 @@ void ICACHE_RAM_ATTR SendReceive::timerInterrupt()
     {
       //increment start bit length counter
       startBitCount++;
+      setTimer(getReceiveBitTime(sampleCounter));
+      return;
     }
     else
     {
@@ -194,8 +217,9 @@ void ICACHE_RAM_ATTR SendReceive::timerInterrupt()
   //for all bits after the start bit
   if (sampleCounter > SAMPLE_COUNT_END_OF_START_PULSE && sampleCounter < SAMPLE_COUNT_TOTAL_BITS)
   {
-#if defined Debug_Data_Only || defined Debug_All_Interrupts
-    digitalWrite(DBG, true);
+#if defined Debug_Data || defined Debug_All_Interrupts
+    //GPOS = GP_DBG;
+    //digitalWrite(DBG, true);
 #endif
     incomingData <<= 1;
     incomingData += dataState ? 1 : 0;
@@ -208,49 +232,57 @@ void ICACHE_RAM_ATTR SendReceive::timerInterrupt()
   }
   else
   {
+    digitalWrite(D6, HIGH);
+
     lastCommandReceivedTime = millis();
     receivedCommand = incomingData;
     incomingData = 0;
 
     //re-enable data interrupt to detect next start bit
-    digitalWrite(D6, HIGH);
     dataInterruptEnabled = true;
-    digitalWrite(LED, true);
 
     //set the timer to trigger ~31ms from now
     //if !dataInterruptEnabled then we'll retrigger every 100us
     //to try and pick up the missed start of the start pulse
     setTimer(DETECT_MISSED_NEXT_START_PULSE);
+    waitingForMissedStartPulse = true;
+
+    digitalWrite(D6, LOW);
+    digitalWrite(D5, LOW);
   }
 
-#if defined Debug_Data_Only || defined Debug_All_Interrupts
-  digitalWrite(DBG, false);
+#if defined Debug_Data || defined Debug_All_Interrupts
+  //GPOC = GP_DBG;
+  //digitalWrite(DBG, false);
 #endif
 
   if (badDataReason > 0)
   {
-    digitalWrite(D3, true);
+    digitalWrite(D7, HIGH);
     delayMicroseconds(10);
-    digitalWrite(D3, false);
+    digitalWrite(D7, LOW);
+    incomingData = 0;
+    sampleCounter = 0;
+    dataInterruptEnabled = true;
+    pollingForStartPulseEnd = false;
   }
 }
 
 void SendReceive::processIncomingCommand()
 {
-  if (receivedCommand == 0)
+  if (badDataReason > 0)
   {
-    if (badDataReason > 0)
-    {
-      Serial.print("SR->Bad Data, Reason: ");
-      Serial.println(badDataReason);
-      badDataReason = 0;
-    }
-
+    logger->logf("SR->Bad Data, Reason: %i", badDataReason);
+    Serial.print("SR->Bad Data, Reason: ");
+    Serial.println(badDataReason);
+    badDataReason = 0;
     return;
   }
 
-  unsigned int command = receivedCommand;
-  receivedCommand = 0;
+  if (receivedCommand == 0)
+  {
+    return;
+  }
 
   if (commandRecovered)
   {
@@ -260,7 +292,8 @@ void SendReceive::processIncomingCommand()
   }
 
   lastCommandReceivedTime = millis();
-  onCommandReceived(command);
+  onCommandReceived(receivedCommand);
+  receivedCommand = 0;
 }
 
 unsigned long SendReceive::getLastCommandReceivedTime()

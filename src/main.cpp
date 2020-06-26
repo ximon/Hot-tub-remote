@@ -160,7 +160,12 @@ void setupBoard()
   pinMode(DATA_ENABLE, OUTPUT);
 
   pinMode(D3, OUTPUT);
+  pinMode(D5, OUTPUT);
   pinMode(D6, OUTPUT);
+  pinMode(D7, OUTPUT);
+  digitalWrite(D5, LOW);
+  digitalWrite(D6, LOW);
+  digitalWrite(D7, LOW);
 
   digitalWrite(DATA_OUT, LOW);
   digitalWrite(DATA_ENABLE, LOW);
@@ -172,7 +177,7 @@ void setupBoard()
 void setupInterrupts()
 {
   timer1_attachInterrupt(handleTimerInterrupt);
-  attachInterrupt(digitalPinToInterrupt(DATA_IN), handleDataInterrupt, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(DATA_IN), handleDataInterrupt, RISING);
 }
 
 void setupMqtt()
