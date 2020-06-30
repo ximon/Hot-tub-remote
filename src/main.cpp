@@ -33,7 +33,7 @@
 #include "HotTubMqtt.h"
 #include "Pins.h"
 
-#include <syslog.h>
+#include <Syslog.h>
 
 // -- Initial name of the Thing. Used e.g. as SSID of the own Access Point.
 const char thingName[] = "HotTubRemote";
