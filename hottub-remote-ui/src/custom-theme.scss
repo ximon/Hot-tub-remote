@@ -19,7 +19,7 @@ $hottub-remote-ui-accent: mat-palette($mat-pink, A200, A100, A400);
 $hottub-remote-ui-warn: mat-palette($mat-red);
 
 // Create the theme object (a Sass map containing all of the palettes).
-$hottub-remote-ui-theme: mat-light-theme($hottub-remote-ui-primary, $hottub-remote-ui-accent, $hottub-remote-ui-warn);
+$hottub-remote-ui-theme: mat-dark-theme($hottub-remote-ui-primary, $hottub-remote-ui-accent, $hottub-remote-ui-warn);
 
 // Include theme styles for core and each component used in your app.
 // Alternatively, you can import and @include the theme mixins for each component

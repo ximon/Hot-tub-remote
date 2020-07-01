@@ -1,20 +1,40 @@
-<mat-card>
-    <mat-card-header>
-        <mat-card-title>
-            State
-        </mat-card-title>
-    </mat-card-header>
-    <mat-button-toggle-group name="state">
-        <mat-button-toggle value="0" (change)="changeState($event.value)">Off</mat-button-toggle>
-        <mat-button-toggle value="1" (change)="changeState($event.value)">Pump</mat-button-toggle>
-        <mat-button-toggle value="3" (change)="changeState($event.value)">Heating</mat-button-toggle>
-        <mat-button-toggle value="4" (change)="changeState($event.value)">Bubbles</mat-button-toggle>
-    </mat-button-toggle-group>    
-</mat-card>
+<section>
+    <mat-card>
+        <mat-card-header>
+            <mat-card-title>Temperature</mat-card-title>
+        </mat-card-header>
+        <span>Current: {{currentTemperature}} &deg;C</span>
+        <mat-slider thumbLabel min="20" max="40"></mat-slider>
+        <span>Target: {{targetTemperature}} &deg;C</span>
+    </mat-card>
+</section>
 
-<mat-card>
-    <mat-card-header>
-        <mat-card-title>Temperature</mat-card-title>
-    </mat-card-header>
-    <mat-slider thumbLabel min="20" max="40"></mat-slider>
-</mat-card>
+<section>
+    <mat-card>
+        <mat-card-header>
+            <mat-card-title>
+                State
+            </mat-card-title>
+        </mat-card-header>
+
+        Current State: Filtering
+        <div fxLayout="row" fxLayoutAlign="center center" fxLayoutGap="5px">
+            <button mat-flat-button color="primary" (click)="changeState(0)">Off</button>
+            <button mat-flat-button color="primary" (click)="changeState(1)">Filter</button>
+            <button mat-flat-button color="primary" (click)="changeState(3)">Heating</button>
+            <button mat-flat-button color="primary" (click)="changeState(4)">Bubbles</button>
+        </div>
+    </mat-card>
+</section>
+
+<section>
+    <mat-card>
+        <mat-card-header>
+            <mat-card-title>Settings</mat-card-title>
+        </mat-card-header>
+
+        <mat-slide-toggle>Auto-Restart</mat-slide-toggle>
+        <mat-slide-toggle>Temperature Lock</mat-slide-toggle>
+        <mat-slide-toggle>Temperature Limit</mat-slide-toggle>
+    </mat-card>
+</section>

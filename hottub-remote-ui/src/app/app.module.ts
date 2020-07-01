@@ -5,11 +5,10 @@ import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
 import { HottubpanelComponent } from './hottubpanel/hottubpanel.component';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
-
-import { MatButtonModule} from '@angular/material/button';
-import { MatButtonToggleModule} from '@angular/material/button-toggle';
-import { MatSliderModule } from '@angular/material/slider';
-import { MatCardModule } from '@angular/material/card';
+import { MaterialModule } from './material/material.module';
+import { FlexLayoutModule } from '@angular/flex-layout';
+import { ServiceWorkerModule } from '@angular/service-worker';
+import { environment } from '../environments/environment';
 
 @NgModule({
   declarations: [
@@ -20,10 +19,9 @@ import { MatCardModule } from '@angular/material/card';
     BrowserModule,
     AppRoutingModule,
     BrowserAnimationsModule,
-    MatButtonModule, 
-    MatButtonToggleModule,
-    MatSliderModule,
-    MatCardModule
+    MaterialModule,
+    FlexLayoutModule,
+    ServiceWorkerModule.register('ngsw-worker.js', { enabled: environment.production })
   ],
   providers: [],
   bootstrap: [AppComponent]
