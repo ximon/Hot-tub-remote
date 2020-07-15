@@ -5,12 +5,13 @@
 | 54075     | 10       | Custom one wire bi-directional serial | Premium Series | ~2006 | UK      | Dark Grey      | Oval display        |
 | 54075     | 3        |                                       | Premium Series | ~2012 | UK      | Light Blue     | Semi-circle display |
 | 54154     | 4        |                                       | Paris          | ~2018 | UK      | Dark blue/grey | Oval display        |
-| 54129     | 4        |                                       | Palm Springs   | ~2018 | France  |
+| 54129     | 4        |                                       | Palm Springs   | ~2018 | France  |                |                     |
 | 54123     | 4        |                                       | Miami          | ~2018 | Germany | Grey           | Round display       |
-| 54112     | 4        |                                       |                | ~2019 | Sweden  |
-| 54156     | 4        |                                       |                |       | UK      |
-| 54123     | 6        |                                       |                |       | UK      |
-| 54314     | 6        |                                       |                |       | Hungary |
+| 54156     | 4        |                                       |                |       | UK      |                |                     |
+| 54112     | 4        |                                       |                | ~2019 | Sweden  |                |                     |
+| 54112     | 6        | SPI                                   | Vegas          | ~2020 | UK      | Grey           | Round display       |
+| 54123     | 6        |                                       |                |       | UK      |                |                     |
+| 54314     | 6        |                                       |                |       | Hungary |                |                     |
 | 54174     | 6        |                                       | Honolulu       | ~2020 | Germany | Grey           | Round display       |
 
 ## Pinouts
