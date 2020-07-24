@@ -48,13 +48,13 @@
 
 | pin | label | function       |
 | --- | ----- | -------------- |
-| 1   | WPUM  | Water Pump?    |
-| 2   | APUM  | Air Pump?      |
-| 3   | MT    | ?              |
-| 4   | LT1   | Light 1? ('f?) |
-| 5   | LT2   | Light 2? ('c?) |
-| 6   | ETES  | ?              |
+| 1   | WPUM  | Water Pump Enable - Active Low |
+| 2   | APUM  | Air Pump Enable - Active Low |
+| 3   | MT    | Water Heater Enable -Active Low |
+| 4   | LT1   | ?              |
+| 5   | LT2   | ?              |
+| 6   | ETES  | Watchdog signal from display - 12ms HIGH, 6ms LOW square wave |
 | 7   | 5v    | 5v Power       |
 | 8   | GND   | Ground         |
-| 9   | LNTC  |                |
-| 10  | MNTC  |                |
+| 9   | LNTC  | ?              |
+| 10  | MNTC  | ?              |
