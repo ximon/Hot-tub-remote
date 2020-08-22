@@ -1,0 +1,14 @@
+menu "Example Configuration"
+    config EXAMPLE_RMT_TX_GPIO
+        int "RMT TX GPIO"
+        default 18
+        help
+            Set the GPIO number used for transmitting the RMT signal
+
+    config EXAMPLE_RMT_RX_GPIO
+        int "RMT RX GPIO"
+        default 19
+        help
+            Set the GPIO number used for receiving the RMT signal
+
+endmenu
