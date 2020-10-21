@@ -9,6 +9,7 @@
 | 54123     | 4        |                                       | Miami          | ~2018 | Germany | Grey           | Round display       |
 | 54156     | 4        |                                       |                |       | UK      |                |                     |
 | 54112     | 4        |                                       |                | ~2019 | Sweden  |                |                     |
+| 54173     | 4        | ?                                     | Maldives HydrojetPro | 2020 | Germany | Grey | 2 WaterPump              |
 | 54112     | 6        | SPI                                   | Vegas          | ~2020 | UK      | Grey           | Round display       |
 | 54123     | 6        |                                       |                |       | UK      |                |                     |
 | 54314     | 6        |                                       |                |       | Hungary |                |                     |
